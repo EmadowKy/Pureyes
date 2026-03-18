@@ -33,6 +33,11 @@ api.interceptors.request.use(
 // 响应拦截器 - 统一处理错误
 api.interceptors.response.use(
   response => {
+    // 如果是文件下载（Blob），直接返回，不解析 JSON
+    if (response.config.responseType === 'blob') {
+      return response
+    }
+    
     const res = response.data
     if (res.code !== 200) {
       return Promise.reject(new Error(res.msg || '请求失败'))

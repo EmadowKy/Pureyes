@@ -371,14 +371,29 @@ def export_records():
         format_type = request.args.get('format', 'json').lower()
         username = get_current_user()
         
+        print(f"\n[DEBUG] 导出请求:")
+        print(f"  用户名：{username}")
+        print(f"  格式：{format_type}")
+        
         # 获取所有记录
         records = qa_manager.get_user_records(username)
+        
+        print(f"  记录数：{len(records)}")
+        
+        if not records:
+            return jsonify({
+                "code": 404,
+                "msg": "当前用户暂无可导出的记录",
+                "data": None
+            }), 404
         
         if format_type == 'json':
             # 创建临时 JSON 文件
             temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
             json.dump(records, temp_file, ensure_ascii=False, indent=2)
             temp_file.close()
+            
+            print(f"  临时文件：{temp_file.name}")
             
             return send_file(
                 temp_file.name,
@@ -394,6 +409,11 @@ def export_records():
             }), 400
         
     except Exception as e:
+        import traceback
+        print(f"\n[ERROR] 导出失败:")
+        print(f"  错误：{e}")
+        traceback.print_exc()
+        
         return jsonify({
             "code": 500,
             "msg": f"服务器错误：{str(e)}",

@@ -441,6 +441,12 @@ async function handleAskSubmit(data) {
 async function handleExport() {
   try {
     const res = await qaApi.exportRecords('json')
+    console.log('导出响应:', res)
+    
+    if (!res.data) {
+      throw new Error('返回数据为空')
+    }
+    
     const blob = new Blob([res.data], { type: 'application/json' })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -451,7 +457,7 @@ async function handleExport() {
     showNotificationBanner('导出成功', 'success')
   } catch (error) {
     console.error('导出失败:', error)
-    showNotificationBanner('导出失败：' + error.message, 'error')
+    showNotificationBanner('导出失败：' + (error.message || '未知错误'), 'error')
   }
 }
 
