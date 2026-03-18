@@ -32,40 +32,33 @@ def ask_model(question: str, video_paths: List[str], config_path: str,
         Dict[str, Any]: The raw JSON response from the model.
     """
     print("=" * 60)
-    print("📺 开始多视频联合分析...")
-    print(f"📹 视频数量: {len(video_paths)}")
+    print("开始多视频联合分析...")
+    print(f"视频数量: {len(video_paths)}")
     if torch.cuda.is_available():
-        print(f"✅ GPU: {torch.cuda.get_device_name(0)}")
-        print(f"✅ 总显存: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+        print(f"GPU: {torch.cuda.get_device_name(0)}")
+        print(f"总显存: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
     print("=" * 60)
     
-    # Initialize the AgentRunner with the configuration file
     agent_runner = AgentRunner(config_path=config_path, device_id=0)
 
-    # Get relative filenames and base directory for all videos
-    # Assuming all videos are in the same directory
     if video_paths:
         base_dir = os.path.dirname(video_paths[0])
         relative_paths = [os.path.basename(vp) for vp in video_paths]
     else:
         return {"error": "No video paths provided", "success": False}
-    
-    # Create a single sample with ALL videos for joint analysis
     sample = {
         "question": question,
-        "video_paths": relative_paths  # Pass relative filenames
+        "video_paths": relative_paths 
     }
 
     try:
-        # Run the model on the sample with ALL videos at once
-        print(f"\n🎬 传入模型的视频: {relative_paths}")
+        print(f"\n传入模型的视频: {relative_paths}")
         result = agent_runner.run_on_sample(sample, video_base_dir=base_dir)
         
-        # Check for errors
         if result.get("success", True) is False:
-            print(f"⚠️ 分析失败: {result.get('error', '未知错误')}")
+            print(f"分析失败: {result.get('error', '未知错误')}")
         else:
-            print(f"✅ 多视频分析完成")
+            print(f"多视频分析完成")
         
         # Clear VRAM after processing
         if enable_memory_optimization:
@@ -75,7 +68,7 @@ def ask_model(question: str, video_paths: List[str], config_path: str,
         
         return result
     except Exception as e:
-        print(f"❌ 处理视频时出错: {e}")
+        print(f"处理视频时出错: {e}")
         import traceback
         traceback.print_exc()
         return {"error": str(e), "success": False}
