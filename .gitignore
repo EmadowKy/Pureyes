@@ -1,0 +1,6 @@
+*.class
+*.class
+*.py[cod]
+__pycache__/
+output/
+node_modules/

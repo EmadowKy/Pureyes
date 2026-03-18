@@ -19,8 +19,11 @@ import shutil
 # Add parent directory to path for imports
 current_file = os.path.abspath(__file__)
 qa_dir = os.path.dirname(current_file)
-project_root = os.path.dirname(qa_dir)
+project_root = os.path.dirname(qa_dir)  # backend 目录
 sys.path.append(project_root)
+
+# 项目根目录（backend 的父目录）- 用于存储数据
+base_project_root = os.path.dirname(project_root)
 
 
 class QAManager:
@@ -39,6 +42,14 @@ class QAManager:
         self.max_records = self.config['storage'].get('max_records_per_user', 100)
         self.backup_dir = self._get_backup_dir()
         
+        # Debug output
+        print(f"\n{'='*60}")
+        print(f"QA Manager 初始化")
+        print(f"project_root: {project_root}")
+        print(f"storage_dir: {self.storage_dir}")
+        print(f"backup_dir: {self.backup_dir}")
+        print(f"{'='*60}\n")
+        
         # Create storage directories if they don't exist
         os.makedirs(self.storage_dir, exist_ok=True)
         if self.config['storage'].get('enable_backup', True):
@@ -55,10 +66,9 @@ class QAManager:
         """Get absolute path for storage directory"""
         storage_path = self.config['storage'].get('storage_dir', 'output/qa_records')
         
-        # If relative path, make it relative to backend directory
+        # 如果是相对路径，相对于项目根目录（backend 的父目录）
         if not os.path.isabs(storage_path):
-            backend_dir = os.path.dirname(os.path.dirname(project_root))
-            storage_path = os.path.join(backend_dir, storage_path)
+            storage_path = os.path.join(base_project_root, storage_path)
         
         return os.path.abspath(storage_path)
     
@@ -67,8 +77,7 @@ class QAManager:
         backup_path = self.config['storage'].get('backup_dir', 'output/qa_backups')
         
         if not os.path.isabs(backup_path):
-            backend_dir = os.path.dirname(os.path.dirname(project_root))
-            backup_path = os.path.join(backend_dir, backup_path)
+            backup_path = os.path.join(base_project_root, backup_path)
         
         return os.path.abspath(backup_path)
     
@@ -112,6 +121,52 @@ class QAManager:
         
         with open(records_file, 'w', encoding='utf-8') as f:
             json.dump(records, f, ensure_ascii=False, indent=2)
+    
+    def save_temp_record(self, username: str, record: Dict[str, Any]) -> None:
+        """
+        Save a temporary processing record for a user
+        
+        Args:
+            username (str): Username
+            record (Dict): Record data with 'processing' status
+        """
+        # Load existing records
+        records = self._load_user_records(username)
+        
+        # Add new record at the beginning
+        records.insert(0, record)
+        
+        # Enforce max records limit
+        if len(records) > self.max_records:
+            removed = records[self.max_records:]
+            records = records[:self.max_records]
+            print(f"超过最大记录数限制 ({self.max_records})，已删除 {len(removed)} 条旧记录")
+        
+        # Save records
+        self._save_user_records(username, records)
+    
+    def update_record(self, username: str, record_id: str, record_data: Dict[str, Any]) -> bool:
+        """
+        Update an existing record
+        
+        Args:
+            username (str): Username
+            record_id (str): Record ID to update
+            record_data (Dict): New record data
+            
+        Returns:
+            bool: True if updated successfully, False if not found
+        """
+        records = self._load_user_records(username)
+        
+        # Find and update the record
+        for i, rec in enumerate(records):
+            if rec.get('record_id') == record_id:
+                records[i] = {**rec, **record_data}
+                self._save_user_records(username, records)
+                return True
+        
+        return False
     
     def ask_question(self, 
                     username: str, 
@@ -247,17 +302,21 @@ class QAManager:
                 "total_records": 0,
                 "success_count": 0,
                 "failure_count": 0,
+                "processing_count": 0,
                 "latest_record": None
             }
         
-        success_count = sum(1 for r in records if r.get("success", True))
-        failure_count = len(records) - success_count
+        # 根据 status 和 success 字段判断状态
+        processing_count = sum(1 for r in records if r.get("status") == "processing" or r.get("success") is None)
+        success_count = sum(1 for r in records if r.get("success") is True and r.get("status") != "processing")
+        failure_count = sum(1 for r in records if r.get("success") is False or r.get("status") == "failed")
         
         return {
             "username": username,
             "total_records": len(records),
             "success_count": success_count,
             "failure_count": failure_count,
+            "processing_count": processing_count,
             "latest_record": records[0],
             "storage_path": self._get_user_dir(username)
         }

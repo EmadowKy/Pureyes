@@ -13,4 +13,8 @@ def create_app():
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SECRET_KEY"] = "temp_key"
     
+    # 注册 QA 问答模块路由
+    from app.qa.routes import qa_bp
+    app.register_blueprint(qa_bp)
+    
     return app
