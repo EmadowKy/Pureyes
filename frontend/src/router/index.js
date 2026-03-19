@@ -1,12 +1,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import QAIndex from '../views/qa/QAIndex.vue'
+import VideoManage from '../views/video/VideoManage.vue'
 
 const routes = [
-  { path: '/', redirect: '/home' },
-  { path: '/home', component: { template: '<div>空白首页</div>' } },
-  { path: '/login', component: { template: '<div>空白登录页</div>' } },
-  { path: '/video', component: { template: '<div>空白视频页</div>' } },
-  { path: '/qa', name: 'QA', component: QAIndex, meta: { title: '智能问答' } }
+  { path: '/', redirect: '/qa' },
+  { path: '/qa', name: 'QA', component: QAIndex, meta: { title: '智能问答' } },
+  { path: '/video', name: 'Video', component: VideoManage, meta: { title: '视频管理' } }
 ]
 
 const router = createRouter({
