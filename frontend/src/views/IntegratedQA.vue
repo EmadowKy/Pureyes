@@ -1,18 +1,12 @@
 <template>
   <div class="integrated-qa-container">
-    <!-- 用户名设置栏 -->
+    <!-- 用户信息栏 -->
     <div class="user-bar">
       <div class="user-info">
-        <label class="user-label">当前用户：</label>
-        <input 
-          v-model="currentUsername" 
-          @change="saveUsername"
-          placeholder="输入用户名" 
-          class="username-input"
-        />
-        <button @click="saveUsername" class="btn-save">保存</button>
+        <span class="user-label">👤 当前用户：</span>
+        <span class="username-display">{{ currentUsername }}</span>
       </div>
-      <div class="user-hint">💡 在用户模块完成前，您可以自由设置用户名（无需登录）</div>
+      <button @click="handleLogout" class="btn-logout">退出登录</button>
     </div>
 
     <!-- 完成通知横幅 -->
@@ -291,11 +285,14 @@
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { qaApi } from '../api/qa'
 import AskDialog from '../components/qa/AskDialog.vue'
 import RecordDetailDialog from '../components/qa/RecordDetailDialog.vue'
 import { VideoPlay, Monitor, FullScreen, Close, Plus, ChatLineRound, Download } from '@element-plus/icons-vue'
+
+const router = useRouter()
 
 // --- 用户名管理 ---
 const currentUsername = ref('default_user')
@@ -318,6 +315,15 @@ function saveUsername() {
   localStorage.setItem('qa_username', currentUsername.value.trim())
   loadStats()
   loadRecords()
+}
+
+// --- 退出登录 ---
+function handleLogout() {
+  if (confirm('确定要退出登录吗？')) {
+    localStorage.removeItem('token')
+    localStorage.removeItem('qa_username')
+    router.push('/login')
+  }
 }
 
 // --- 通知系统 ---
@@ -643,25 +649,26 @@ function truncateAnswer(answer, maxLength = 100) {
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
 }
 
-.btn-save {
+.username-display {
+  color: white;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.btn-logout {
   padding: 8px 20px;
-  background: white;
-  color: #667eea;
-  border: none;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.4);
   border-radius: 6px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s;
 }
 
-.btn-save:hover {
-  background: #f0f0f0;
+.btn-logout:hover {
+  background: rgba(255, 255, 255, 0.3);
   transform: translateY(-1px);
-}
-
-.user-hint {
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 13px;
 }
 
 /* 通知横幅 */
