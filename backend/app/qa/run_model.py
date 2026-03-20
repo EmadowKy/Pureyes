@@ -24,7 +24,7 @@ def ask_model(question: str, video_paths: List[str], config_path: str,
     
     Args:
         question (str): The question to analyze.
-        video_paths (List[str]): A list of paths to the video files.
+        video_paths (List[str]): A list of relative paths to the video files (e.g., 'example/1.mp4').
         config_path (str): Path to the configuration file for the model.
         enable_memory_optimization (bool): Enable GPU memory optimization (default: True).
 
@@ -41,18 +41,43 @@ def ask_model(question: str, video_paths: List[str], config_path: str,
     
     agent_runner = AgentRunner(config_path=config_path, device_id=0)
 
-    if video_paths:
-        base_dir = os.path.dirname(video_paths[0])
-        relative_paths = [os.path.basename(vp) for vp in video_paths]
-    else:
+    if not video_paths:
         return {"error": "No video paths provided", "success": False}
+    
+    # 获取backend目录的绝对路径作为base_dir
+    current_file = os.path.abspath(__file__)
+    # 向上三级：qa/run_model.py → app → backend
+    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_file)))
+    
+    # 将相对路径转换为绝对路径
+    full_video_paths = []
+    relative_paths = []
+    for vp in video_paths:
+        full_path = os.path.join(backend_dir, vp)
+        if not os.path.exists(full_path):
+            print(f"Warning: Video not found at {full_path}")
+            continue
+        full_video_paths.append(full_path)
+        relative_paths.append(vp)
+    
+    if not full_video_paths:
+        return {"error": "No valid video paths found", "success": False}
+    
+    # 获取所有视频的公共目录
+    base_dir = os.path.dirname(full_video_paths[0])
+    
+    # 只传递视频文件名，而不是完整的相对路径
+    video_filenames = [os.path.basename(vp) for vp in relative_paths]
+    
     sample = {
         "question": question,
-        "video_paths": relative_paths 
+        "video_paths": video_filenames 
     }
 
     try:
         print(f"\n传入模型的视频: {relative_paths}")
+        print(f"完整路径: {full_video_paths}")
+        print(f"基础目录: {base_dir}")
         result = agent_runner.run_on_sample(sample, video_base_dir=base_dir)
         
         if result.get("success", True) is False:

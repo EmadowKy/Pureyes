@@ -1,25 +1,21 @@
-# backend/app/video_routes.py
-"""视频播放路由 - 提供视频文件访问服务（通用相对路径版）"""
+# backend/app/video/routes.py
+"""视频模块的 API 路由 - 提供视频文件访问"""
 
 from flask import Blueprint, send_file, abort
 import os
 
 video_bp = Blueprint('video', __name__, url_prefix='/api/video')
 
-# 获取backend目录的绝对路径
+# 从当前文件路径计算backend根目录
 current_file = os.path.abspath(__file__)
-# 向上两级：app → backend
-BACKEND_DIR = os.path.dirname(os.path.dirname(current_file))
-
-# 打印路径信息用于调试
-print(f"[DEBUG] video_routes.py current file: {current_file}")
-print(f"[DEBUG] video_routes.py BACKEND_DIR: {BACKEND_DIR}")
+# 向上三级：video → app → backend
+backend_root = os.path.dirname(os.path.dirname(os.path.dirname(current_file)))
 
 
 @video_bp.route('/<path:video_path>')
 def serve_video(video_path):
     """
-    提供视频文件访问（支持通用相对路径）
+    提供视频文件访问
     GET /api/video/<path>
     
     Args:
@@ -30,20 +26,20 @@ def serve_video(video_path):
     """
     try:
         # 构建完整的文件路径
-        full_path = os.path.join(BACKEND_DIR, video_path)
+        full_path = os.path.join(backend_root, video_path)
+        
+        # 安全检查：确保路径在backend根目录内
+        if not os.path.abspath(full_path).startswith(backend_root):
+            abort(403, description="Access denied")
         
         # 打印路径信息用于调试
         print(f"[DEBUG] Requested video: {video_path}")
         print(f"[DEBUG] Full path: {full_path}")
-        print(f"[DEBUG] File exists: {os.path.exists(full_path)}")
-        
-        # 安全检查：确保路径在backend目录内
-        if not os.path.abspath(full_path).startswith(BACKEND_DIR):
-            abort(403, description="Access denied")
+        print(f"[DEBUG] Backend root: {backend_root}")
         
         # 检查文件是否存在
         if not os.path.exists(full_path):
-            abort(404, description=f"Video not found: {video_path} (Full path: {full_path})")
+            abort(404, description=f"Video not found: {video_path}")
         
         # 检查是否为文件
         if not os.path.isfile(full_path):
