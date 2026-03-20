@@ -116,6 +116,10 @@ const props = defineProps({
   submitting: {
     type: Boolean,
     default: false
+  },
+  preselectedVideos: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -153,14 +157,19 @@ const EXAMPLE_VIDEOS = [
 // 加载可用视频列表
 onMounted(async () => {
   await loadVideos()
+  
+  // 如果有预选择的视频，使用预选择的视频
+  if (props.preselectedVideos && props.preselectedVideos.length > 0) {
+    formData.value.video_paths = [...props.preselectedVideos]
+  }
 })
 
 async function loadVideos() {
   // 在视频模块完成前，直接使用示例视频
   availableVideos.value = EXAMPLE_VIDEOS
   
-  // 默认勾选第一个视频
-  if (availableVideos.value.length > 0) {
+  // 默认勾选第一个视频（如果没有预选择）
+  if (availableVideos.value.length > 0 && (!props.preselectedVideos || props.preselectedVideos.length === 0)) {
     formData.value.video_paths = [availableVideos.value[0].path]
   }
 }

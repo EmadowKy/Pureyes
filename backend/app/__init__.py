@@ -17,4 +17,8 @@ def create_app():
     from app.qa.routes import qa_bp
     app.register_blueprint(qa_bp)
     
+    # 注册视频播放路由
+    from app.video_routes import video_bp
+    app.register_blueprint(video_bp)
+    
     return app
