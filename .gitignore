@@ -1,5 +1,38 @@
 *.class
 *.py[cod]
 __pycache__/
+
+# 数据或结果输出
 output/
+
+# 前端依赖
 node_modules/
+.DS_Store
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# Flask instance目录（视如果创建的情况）
+instance/
+
+# Python虚拟环境
+venv/
+.venv/
+env/
+.env
+
+# 日志
+*.log
+
+# 运行时生成的数据目录（细化）
+output/qa_backups/
+output/qa_records/
+output/video_frames/
+output/key_frames/
+# 输出中的 JSON 备份（仅忽略 output 下的 json）
+output/**/*.json
+
+# 前端构建产物
+frontend/dist/

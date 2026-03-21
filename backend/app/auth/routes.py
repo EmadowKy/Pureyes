@@ -48,6 +48,7 @@ def register():
 
     return success(
         message="register success",
+        code=200,
         data={
             "uid": user.id,
             "username": user.username,

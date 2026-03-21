@@ -1,7 +1,8 @@
 # backend/app/__init__.py
 from flask import Flask
 import os
-from .extensions import db, jwt, cors
+from .core.db import db
+from .extensions import jwt, cors
 from .core.config import Config
 
 def create_app():
