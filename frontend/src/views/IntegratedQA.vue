@@ -3,10 +3,13 @@
     <!-- 用户信息栏 -->
     <div class="user-bar">
       <div class="user-info">
-        <span class="user-label">👤 当前用户：</span>
+        <span class="user-label">当前用户：</span>
         <span class="username-display">{{ currentUsername }}</span>
       </div>
-      <button @click="handleLogout" class="btn-logout">退出登录</button>
+      <div class="actions">
+        <button @click="goToProfile" class="btn-profile">用户信息</button>
+        <button @click="handleLogout" class="btn-logout">退出登录</button>
+      </div>
     </div>
 
     <!-- 完成通知横幅 -->
@@ -317,6 +320,11 @@ function saveUsername() {
   loadRecords()
 }
 
+// --- 跳转到用户信息页 ---
+function goToProfile() {
+  router.push('/profile')
+}
+
 // --- 退出登录 ---
 function handleLogout() {
   if (confirm('确定要退出登录吗？')) {
@@ -617,13 +625,15 @@ function truncateAnswer(answer, maxLength = 100) {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 16px 24px;
   box-shadow: 0 2px 12px rgba(102, 126, 234, 0.3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .user-info {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-bottom: 8px;
 }
 
 .user-label {
@@ -655,6 +665,13 @@ function truncateAnswer(answer, maxLength = 100) {
   font-size: 15px;
 }
 
+.actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.btn-profile,
 .btn-logout {
   padding: 8px 20px;
   background: rgba(255, 255, 255, 0.2);
@@ -664,8 +681,10 @@ function truncateAnswer(answer, maxLength = 100) {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s;
+  font-size: 14px;
 }
 
+.btn-profile:hover,
 .btn-logout:hover {
   background: rgba(255, 255, 255, 0.3);
   transform: translateY(-1px);

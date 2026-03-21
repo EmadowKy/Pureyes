@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import IntegratedQA from '../views/IntegratedQA.vue'
 import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
+import UserProfile from '../views/UserProfile.vue'
 
 const routes = [
   { path: '/', redirect: '/qa' },
@@ -13,6 +14,12 @@ const routes = [
     component: IntegratedQA, 
     meta: { title: '智能问答', requiresAuth: true } 
   }
+  ,{
+    path: '/profile',
+    name: 'Profile',
+    component: UserProfile,
+    meta: { title: '用户信息', requiresAuth: true }
+  }
 ]
 
 const router = createRouter({
@@ -22,7 +29,7 @@ const router = createRouter({
 
 // 路由守卫
 router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem('access_token') || localStorage.getItem('token')
   
   // 需要登录但没登录，跳转到登录页
   if (to.meta.requiresAuth && !token) {

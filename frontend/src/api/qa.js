@@ -12,7 +12,7 @@ const api = axios.create({
 // 请求拦截器 - 添加 token 和用户名
 api.interceptors.request.use(
   config => {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('access_token') || localStorage.getItem('token')
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`
     }
@@ -46,6 +46,17 @@ api.interceptors.response.use(
   },
   error => {
     console.error('API 请求错误:', error)
+
+    if (error.response && error.response.status === 401) {
+      // 认证失效，清空本地信息并跳转登录
+      localStorage.removeItem('token')
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      localStorage.removeItem('user_info')
+      localStorage.removeItem('qa_username')
+      window.location.href = '/login'
+    }
+
     return Promise.reject(error)
   }
 )

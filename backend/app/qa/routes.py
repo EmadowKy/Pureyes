@@ -163,9 +163,8 @@ def ask():
             },
             'status': 'processing'
         }
-        
-    # 先保存一个临时记录到用户的记录中（按 uid 存储，保留 username 作展示）
-    qa_manager.save_temp_record(uid, temp_record, username)
+        # 先保存一个临时记录到用户的记录中（按 uid 存储，保留 username 作展示）
+        qa_manager.save_temp_record(uid, temp_record, username)
         
         # 记录任务
         running_tasks[task_id] = {
