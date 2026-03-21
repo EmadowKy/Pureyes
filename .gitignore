@@ -31,6 +31,7 @@ output/qa_backups/
 output/qa_records/
 output/video_frames/
 output/key_frames/
+backend/uploads/
 # 输出中的 JSON 备份（仅忽略 output 下的 json）
 output/**/*.json
 
