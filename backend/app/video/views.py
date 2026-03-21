@@ -1,6 +1,7 @@
 import os
 import uuid
 from flask import request
+from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from datetime import datetime
 
 from app.core.db import db
@@ -30,32 +31,27 @@ VIDEO_PATH = Config.VIDEO_UPLOAD_PATH
 os.makedirs(VIDEO_PATH, exist_ok = True)
 
 
-# token校验工具函数[模拟]
-def get_uid_from_token(token):
-    # """从token获取真实UID（后续替换为团队真实接口）"""
-    # 临时模拟：token有效则返回uid，无效返回None
-    if token and token.startswith("valid_"):
-        return token.replace("valid_", "")
-    return None
+# 统一鉴权：所有视频操作应使用 JWT。使用装饰器和 get_jwt_identity()/get_jwt() 获取用户信息。
 
 
 
 # 上传视频
+@jwt_required()
 def upload_video():
-    token = request.form.get("token")
+    # 从 JWT 获取 uid（identity）与 username（claims）
+    uid = get_jwt_identity()
+    claims = get_jwt()
+    username = claims.get("username")
+
     video_name = request.form.get("video_name")
     video_file = request.files.get("video_file")
 
-    if not token:
-        return fail(code = 400, msg = "缺少token")
-    if not video_name:
-        return fail(code = 400, msg = "缺少视频名称")
-    if not video_file:
-        return fail(code = 400, msg = "缺少视频文件")
-    
-    uid = get_uid_from_token(token)
     if not uid:
-        return fail(code = 401, msg = "token无效")
+        return fail(code=401, msg="token无效或已过期")
+    if not video_name:
+        return fail(code=400, msg="缺少视频名称")
+    if not video_file:
+        return fail(code=400, msg="缺少视频文件")
 
     try:
         video_id = str(uuid.uuid4()).replace("-", "")[:32]
@@ -82,18 +78,16 @@ def upload_video():
         # code=500表示服务器内部错误
 
 # 删除视频
+@jwt_required()
 def delete_video():
     data = request.get_json() or {}
-    token = data.get("token")
     video_id = data.get("video_id")
 
-    if not token:
-        return fail(code = 400, msg = "缺少token")
-    if not video_id:
-        return fail(code = 400, msg = "缺少视频ID")
-    uid = get_uid_from_token(token)
+    uid = get_jwt_identity()
     if not uid:
-        return fail(code = 401, msg = "token无效")
+        return fail(code=401, msg="token无效或已过期")
+    if not video_id:
+        return fail(code=400, msg="缺少视频ID")
     
     try:
         # 查询视频是否存在且属于当前用户
@@ -117,21 +111,19 @@ def delete_video():
         return fail(code=500, msg=f"视频删除失败：{str(e)}")
 
 # 重命名视频
+@jwt_required()
 def rename_video():
     data = request.get_json() or {}
-    token = data.get("token")
     video_id = data.get("video_id")
     new_name = data.get("new_name")
 
-    if not token:
-        return fail(code = 400, msg = "缺少token")
-    if not video_id:
-        return fail(code = 400, msg = "缺少视频ID")
-    if not new_name:
-        return fail(code = 400, msg = "缺少新视频名称")
-    uid = get_uid_from_token(token)
+    uid = get_jwt_identity()
     if not uid:
-        return fail(code = 401, msg = "token无效")
+        return fail(code=401, msg="token无效或已过期")
+    if not video_id:
+        return fail(code=400, msg="缺少视频ID")
+    if not new_name:
+        return fail(code=400, msg="缺少新视频名称")
 
     try:
         video = Video.query.filter_by(video_id = video_id, uid = uid).first()
@@ -156,20 +148,17 @@ def rename_video():
         return fail(code=500, msg=f"视频重命名失败：{str(e)}")
 
 # 勾选视频
+@jwt_required()
 def tick_video():
     data = request.get_json() or {}
-    token = data.get("token")
     video_ids = data.get("video_ids", []) # 勾选视频的ID列表
     is_ticked = data.get("is_ticked")
-    if not token:
-        return fail(code = 400, msg = "缺少token")
     if not isinstance(video_ids, list) or not video_ids:
-        return fail(code = 400, msg = "视频ID列表不能为空")
-    # 这里检查video_ids是否是一个列表，并且不为空
-    
-    uid = get_uid_from_token(token)
+        return fail(code=400, msg="视频ID列表不能为空")
+
+    uid = get_jwt_identity()
     if not uid:
-        return fail(code = 401, msg = "token无效")
+        return fail(code=401, msg="token无效或已过期")
     
     try:
         Video.query.filter(
@@ -187,13 +176,11 @@ def tick_video():
         return fail(code=500, msg=f"视频勾选失败：{str(e)}")
 
 # 查看所有视频的列表
+@jwt_required()
 def get_video_list():
-    token = request.args.get("token")
-    if not token:
-        return fail(code = 400, msg = "缺少token")
-    uid = get_uid_from_token(token)
+    uid = get_jwt_identity()
     if not uid:
-        return fail(code = 401, msg = "token无效")
+        return fail(code=401, msg="token无效或已过期")
 
     try:
         videos = Video.query.filter_by(uid = uid).order_by(Video.upload_time.desc()).all()
@@ -210,16 +197,14 @@ def get_video_list():
         return fail(code=500, msg=f"获取视频列表失败：{str(e)}")
 
 # 查看单个视频
+@jwt_required()
 def get_single_video():
-    token = request.args.get("token")
+    uid = get_jwt_identity()
     video_id = request.args.get("video_id")
-    if not token:
-        return fail(code = 400, msg = "缺少token")
-    if not video_id:
-        return fail(code = 400, msg = "缺少视频ID")
-    uid = get_uid_from_token(token)
     if not uid:
-        return fail(code = 401, msg = "token无效")
+        return fail(code=401, msg="token无效或已过期")
+    if not video_id:
+        return fail(code=400, msg="缺少视频ID")
 
     try:
         video = Video.query.filter_by(video_id = video_id, uid = uid).first()

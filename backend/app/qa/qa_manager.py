@@ -81,18 +81,21 @@ class QAManager:
         
         return os.path.abspath(backup_path)
     
-    def _get_user_dir(self, username: str) -> str:
-        """Get directory path for a specific user"""
-        return os.path.join(self.storage_dir, username)
+    def _get_user_dir(self, user_id: str) -> str:
+        """Get directory path for a specific user by uid (string/int).
+
+        We store QA records under `storage_dir/<uid>/` to ensure stability even if username changes.
+        """
+        return os.path.join(self.storage_dir, str(user_id))
     
-    def _get_records_file(self, username: str) -> str:
-        """Get path to user's records JSON file"""
-        user_dir = self._get_user_dir(username)
+    def _get_records_file(self, user_id: str) -> str:
+        """Get path to user's records JSON file (by uid)"""
+        user_dir = self._get_user_dir(user_id)
         return os.path.join(user_dir, "qa_records.json")
     
-    def _load_user_records(self, username: str) -> List[Dict[str, Any]]:
-        """Load existing records for a user"""
-        records_file = self._get_records_file(username)
+    def _load_user_records(self, user_id: str) -> List[Dict[str, Any]]:
+        """Load existing records for a user (by uid)"""
+        records_file = self._get_records_file(user_id)
         
         if not os.path.exists(records_file):
             return []
@@ -104,36 +107,41 @@ class QAManager:
             print(f"Warning: Failed to load records for {username}: {e}")
             return []
     
-    def _save_user_records(self, username: str, records: List[Dict[str, Any]]) -> None:
-        """Save records for a user"""
-        user_dir = self._get_user_dir(username)
+    def _save_user_records(self, user_id: str, records: List[Dict[str, Any]]) -> None:
+        """Save records for a user (by uid)"""
+        user_dir = self._get_user_dir(user_id)
         os.makedirs(user_dir, exist_ok=True)
         
-        records_file = self._get_records_file(username)
+        records_file = self._get_records_file(user_id)
         
         # Create backup before saving if enabled
         if self.config['storage'].get('enable_backup', True) and os.path.exists(records_file):
             backup_file = os.path.join(
-                self.backup_dir, 
-                f"{username}_qa_records_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                self.backup_dir,
+                f"{user_id}_qa_records_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
             )
             shutil.copy2(records_file, backup_file)
         
         with open(records_file, 'w', encoding='utf-8') as f:
             json.dump(records, f, ensure_ascii=False, indent=2)
     
-    def save_temp_record(self, username: str, record: Dict[str, Any]) -> None:
+    def save_temp_record(self, user_id: str, record: Dict[str, Any], username: Optional[str] = None) -> None:
         """
-        Save a temporary processing record for a user
-        
+        Save a temporary processing record for a user (by uid).
+
         Args:
-            username (str): Username
+            user_id (str|int): User id (uid) used for storage path
             record (Dict): Record data with 'processing' status
+            username (str, optional): Human-readable username to store inside record for display
         """
         # Load existing records
-        records = self._load_user_records(username)
+        records = self._load_user_records(user_id)
         
         # Add new record at the beginning
+        # ensure record contains uid and username snapshot
+        record.setdefault('uid', str(user_id))
+        if username:
+            record.setdefault('username', username)
         records.insert(0, record)
         
         # Enforce max records limit
@@ -143,9 +151,9 @@ class QAManager:
             print(f"超过最大记录数限制 ({self.max_records})，已删除 {len(removed)} 条旧记录")
         
         # Save records
-        self._save_user_records(username, records)
+        self._save_user_records(user_id, records)
     
-    def update_record(self, username: str, record_id: str, record_data: Dict[str, Any]) -> bool:
+    def update_record(self, user_id: str, record_id: str, record_data: Dict[str, Any]) -> bool:
         """
         Update an existing record
         
@@ -157,19 +165,22 @@ class QAManager:
         Returns:
             bool: True if updated successfully, False if not found
         """
-        records = self._load_user_records(username)
-        
+        records = self._load_user_records(user_id)
+
         # Find and update the record
         for i, rec in enumerate(records):
             if rec.get('record_id') == record_id:
                 records[i] = {**rec, **record_data}
-                self._save_user_records(username, records)
+                # ensure uid remains
+                records[i].setdefault('uid', str(user_id))
+                self._save_user_records(user_id, records)
                 return True
-        
+
         return False
     
     def ask_question(self, 
-                    username: str, 
+                    user_id: str,
+                    username: Optional[str],
                     question: str, 
                     video_paths: List[str], 
                     config_path: str,
@@ -189,16 +200,16 @@ class QAManager:
         """
         # Lazy import to avoid loading torch at module level
         from run_model import ask_model
-        
+
         print(f"\n{'='*60}")
-        print(f"用户: {username}")
+        print(f"用户 uid: {user_id} username: {username}")
         print(f"问题: {question}")
         print(f"视频数: {len(video_paths)}")
         print(f"{'='*60}")
-        
+
         # Generate unique record ID
         record_id = str(uuid.uuid4())
-        
+
         # Run the model
         print("运行模型分析...")
         result = ask_model(
@@ -207,38 +218,40 @@ class QAManager:
             config_path=config_path,
             enable_memory_optimization=enable_memory_optimization
         )
-        
+
         # Create record
         timestamp = datetime.now().isoformat()
         record = {
             "record_id": record_id,
+            "uid": str(user_id),
+            "username": username,
             "timestamp": timestamp,
             "question": question,
             "video_paths": video_paths,
             "model_result": result,
             "success": result.get("success", True)
         }
-        
+
         # Load existing records
-        records = self._load_user_records(username)
-        
+        records = self._load_user_records(user_id)
+
         # Add new record at the beginning
         records.insert(0, record)
-        
+
         # Enforce max records limit
         if len(records) > self.max_records:
             removed = records[self.max_records:]
             records = records[:self.max_records]
             print(f"超过最大记录数限制 ({self.max_records})，已删除 {len(removed)} 条旧记录")
-        
+
         # Save records
-        self._save_user_records(username, records)
-        
+        self._save_user_records(user_id, records)
+
         print(f"记录已保存 (ID: {record_id})")
-        
+
         return record
     
-    def delete_record(self, username: str, record_id: str) -> bool:
+    def delete_record(self, user_id: str, record_id: str) -> bool:
         """
         Delete a specific QA record by username and record ID
         
@@ -249,23 +262,23 @@ class QAManager:
         Returns:
             bool: True if deletion successful, False if record not found
         """
-        records = self._load_user_records(username)
-        
+        records = self._load_user_records(user_id)
+
         # Find and remove the record
         original_count = len(records)
         records = [r for r in records if r.get("record_id") != record_id]
-        
+
         if len(records) == original_count:
-            print(f"记录未找到 - 用户: {username}, ID: {record_id}")
+            print(f"记录未找到 - 用户 uid: {user_id}, ID: {record_id}")
             return False
-        
+
         # Save updated records
-        self._save_user_records(username, records)
-        print(f"记录已删除 - 用户: {username}, ID: {record_id}")
-        
+        self._save_user_records(user_id, records)
+        print(f"记录已删除 - 用户 uid: {user_id}, ID: {record_id}")
+
         return True
     
-    def get_user_records(self, username: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_user_records(self, user_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         Get all QA records for a user
         
@@ -276,15 +289,15 @@ class QAManager:
         Returns:
             List[Dict]: List of QA records for the user
         """
-        records = self._load_user_records(username)
-        
+        records = self._load_user_records(user_id)
+
         # Return limited results if specified
         if limit is not None:
             records = records[:limit]
-        
+
         return records
     
-    def get_record_summary(self, username: str) -> Dict[str, Any]:
+    def get_record_summary(self, user_id: str) -> Dict[str, Any]:
         """
         Get summary statistics about user's records
         
@@ -294,11 +307,11 @@ class QAManager:
         Returns:
             Dict: Summary including total records, success count, latest timestamp, etc.
         """
-        records = self._load_user_records(username)
-        
+        records = self._load_user_records(user_id)
+
         if not records:
             return {
-                "username": username,
+                "username": None,
                 "total_records": 0,
                 "success_count": 0,
                 "failure_count": 0,
@@ -312,16 +325,16 @@ class QAManager:
         failure_count = sum(1 for r in records if r.get("success") is False or r.get("status") == "failed")
         
         return {
-            "username": username,
+            "username": records[0].get('username') if records else None,
             "total_records": len(records),
             "success_count": success_count,
             "failure_count": failure_count,
             "processing_count": processing_count,
             "latest_record": records[0],
-            "storage_path": self._get_user_dir(username)
+            "storage_path": self._get_user_dir(user_id)
         }
     
-    def export_records(self, username: str, export_path: str) -> bool:
+    def export_records(self, user_id: str, export_path: str) -> bool:
         """
         Export user's records to a specific file
         
@@ -332,8 +345,8 @@ class QAManager:
         Returns:
             bool: True if export successful
         """
-        records = self._load_user_records(username)
-        
+        records = self._load_user_records(user_id)
+
         try:
             os.makedirs(os.path.dirname(export_path), exist_ok=True)
             with open(export_path, 'w', encoding='utf-8') as f:

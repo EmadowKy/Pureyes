@@ -2,6 +2,7 @@
 """QA 模块的 API 路由 - 支持异步处理"""
 
 from flask import Blueprint, request, jsonify, send_file
+from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from .qa_manager import QAManager
 from .run_model import ask_model
 import os
@@ -24,47 +25,51 @@ running_tasks = {}
 
 
 def get_current_user(request_data=None):
-    """从请求头、请求体或查询参数获取当前用户信息"""
+    """Return (uid, username). Prefer JWT identity and claims; fall back to request data or headers.
+
+    uid may be None if JWT is not present. username may be None as well.
+    """
+    uid = None
     username = None
-    
-    # 优先从请求体获取 username
-    if request_data and isinstance(request_data, dict):
+
+    # try jwt first
+    try:
+        uid = get_jwt_identity()
+        claims = get_jwt()
+        username = claims.get('username')
+    except Exception:
+        uid = None
+        username = None
+
+    # fallback to request body
+    if not username and request_data and isinstance(request_data, dict):
         username = request_data.get('username')
-    
-    # 其次从查询参数获取（用于 GET 请求）
+
+    # fallback to query
     if not username:
         username = request.args.get('username')
-    
-    # 再从 Authorization header 获取
-    if not username:
-        token = request.headers.get('Authorization', '').replace('Bearer ', '')
-        if token and token.startswith("valid_"):
-            username = token.replace("valid_", "")
-    
-    # 最后从 X-Username header 获取
+
+    # fallback to header
     if not username:
         username = request.headers.get('X-Username')
-    
-    if username:
-        return username
-    
-    return "default_user"
+
+    return uid, username
 
 
-def process_question_async(task_id, username, question, video_paths, config_path):
+def process_question_async(task_id, user_id, username, question, video_paths, config_path):
     """后台线程处理问题"""
     try:
         # 调用模型回答问题
         result = ask_model(question, video_paths, config_path)
-        
+
         # 提取回答内容 - 优先使用 predicted_answer，其次使用 answer_generation.raw_output
         answer = result.get('predicted_answer') or \
                  (result.get('answer_generation') or {}).get('raw_output') or \
                  '无回答'
-        
+
         # 添加 answer 字段到 model_result（方便前端读取）
         result['answer'] = answer
-        
+
         # 创建最终记录
         final_record = {
             'record_id': task_id,
@@ -75,15 +80,15 @@ def process_question_async(task_id, username, question, video_paths, config_path
             'model_result': result,
             'status': 'completed'  # 标记为已完成
         }
-        
+
         # 更新记录（替换临时记录）
-        qa_manager.update_record(username, task_id, final_record)
-        
+        qa_manager.update_record(user_id, task_id, final_record)
+
         # 更新任务状态
         running_tasks[task_id]['status'] = 'completed'
         running_tasks[task_id]['result'] = result
         running_tasks[task_id]['completed_at'] = datetime.now().isoformat()
-        
+
     except Exception as e:
         # 处理失败
         error_record = {
@@ -95,14 +100,15 @@ def process_question_async(task_id, username, question, video_paths, config_path
             },
             'status': 'failed'  # 标记为失败
         }
-        qa_manager.update_record(username, task_id, error_record)
-        
+        qa_manager.update_record(user_id, task_id, error_record)
+
         running_tasks[task_id]['status'] = 'failed'
         running_tasks[task_id]['error'] = str(e)
         running_tasks[task_id]['completed_at'] = datetime.now().isoformat()
 
 
 @qa_bp.route('/ask', methods=['POST'])
+@jwt_required()
 def ask():
     """
     提问接口（异步处理）
@@ -136,8 +142,10 @@ def ask():
         if not video_paths or len(video_paths) == 0:
             return jsonify({"code": 400, "msg": "请至少选择一个视频", "data": None}), 400
         
-        # 获取当前用户
-        username = get_current_user(data)
+        # 获取当前用户 uid 与 username（优先使用 JWT）
+        uid, username = get_current_user(data)
+        if not uid:
+            return jsonify({"code":401, "msg":"未认证的用户", "data":None}), 401
         
         # 生成任务 ID
         task_id = str(uuid.uuid4())
@@ -156,11 +164,12 @@ def ask():
             'status': 'processing'
         }
         
-        # 先保存一个临时记录到用户的记录中
-        qa_manager.save_temp_record(username, temp_record)
+    # 先保存一个临时记录到用户的记录中（按 uid 存储，保留 username 作展示）
+    qa_manager.save_temp_record(uid, temp_record, username)
         
         # 记录任务
         running_tasks[task_id] = {
+            'uid': uid,
             'username': username,
             'question': question,
             'video_paths': video_paths,
@@ -173,7 +182,7 @@ def ask():
         config_path = os.path.join(os.path.dirname(__file__), "../../configs/model.yaml")
         thread = threading.Thread(
             target=process_question_async,
-            args=(task_id, username, question, video_paths, config_path)
+            args=(task_id, uid, username, question, video_paths, config_path)
         )
         thread.daemon = True
         thread.start()
@@ -197,14 +206,17 @@ def ask():
 
 
 @qa_bp.route('/task/<task_id>/status', methods=['GET'])
+@jwt_required()
 def get_task_status(task_id):
     """
     获取任务状态
     GET /api/qa/task/{task_id}/status
     """
     try:
-        username = get_current_user()
-        records = qa_manager.get_user_records(username)
+        uid, username = get_current_user()
+        if not uid:
+            return jsonify({"code":401, "msg":"未认证的用户", "data":None}), 401
+        records = qa_manager.get_user_records(uid)
         record = next((r for r in records if r.get('record_id') == task_id), None)
         
         if not record:
@@ -232,6 +244,7 @@ def get_task_status(task_id):
 
 
 @qa_bp.route('/records', methods=['GET'])
+@jwt_required()
 def get_records():
     """
     获取用户的问答记录列表
@@ -241,10 +254,12 @@ def get_records():
         page = int(request.args.get('page', 1))
         limit = int(request.args.get('limit', 10))
         
-        username = get_current_user()
-        
+        uid, username = get_current_user()
+        if not uid:
+            return jsonify({"code":401, "msg":"未认证的用户", "data":None}), 401
+
         # 直接从存储中获取所有记录（包括正在处理的记录）
-        all_records = qa_manager.get_user_records(username)
+        all_records = qa_manager.get_user_records(uid)
         
         # 分页
         total = len(all_records)
@@ -272,16 +287,19 @@ def get_records():
 
 
 @qa_bp.route('/record/<record_id>', methods=['GET'])
+@jwt_required()
 def get_record(record_id):
     """
     获取单条问答记录详情
     GET /api/qa/record/{record_id}
     """
     try:
-        username = get_current_user()
+        uid, username = get_current_user()
+        if not uid:
+            return jsonify({"code":401, "msg":"未认证的用户", "data":None}), 401
         
         # 从记录中查找
-        records = qa_manager.get_user_records(username)
+        records = qa_manager.get_user_records(uid)
         record = next((r for r in records if r.get('record_id') == record_id), None)
         
         if not record:
@@ -306,15 +324,18 @@ def get_record(record_id):
 
 
 @qa_bp.route('/record/<record_id>', methods=['DELETE'])
+@jwt_required()
 def delete_record(record_id):
     """
     删除问答记录
     DELETE /api/qa/record/{record_id}
     """
     try:
-        username = get_current_user()
-        
-        success = qa_manager.delete_record(username, record_id)
+        uid, username = get_current_user()
+        if not uid:
+            return jsonify({"code":401, "msg":"未认证的用户", "data":None}), 401
+
+        success = qa_manager.delete_record(uid, record_id)
         
         if success:
             return jsonify({
@@ -338,14 +359,17 @@ def delete_record(record_id):
 
 
 @qa_bp.route('/summary', methods=['GET'])
+@jwt_required()
 def get_summary():
     """
     获取统计摘要
     GET /api/qa/summary
     """
     try:
-        username = get_current_user()
-        summary = qa_manager.get_record_summary(username)
+        uid, username = get_current_user()
+        if not uid:
+            return jsonify({"code":401, "msg":"未认证的用户", "data":None}), 401
+        summary = qa_manager.get_record_summary(uid)
         
         return jsonify({
             "code": 200,
@@ -362,6 +386,7 @@ def get_summary():
 
 
 @qa_bp.route('/export', methods=['GET'])
+@jwt_required()
 def export_records():
     """
     导出问答记录
@@ -369,14 +394,16 @@ def export_records():
     """
     try:
         format_type = request.args.get('format', 'json').lower()
-        username = get_current_user()
-        
+        uid, username = get_current_user()
+        if not uid:
+            return jsonify({"code":401, "msg":"未认证的用户", "data":None}), 401
+
         print(f"\n[DEBUG] 导出请求:")
-        print(f"  用户名：{username}")
+        print(f"  用户名：{username} uid: {uid}")
         print(f"  格式：{format_type}")
-        
+
         # 获取所有记录
-        records = qa_manager.get_user_records(username)
+        records = qa_manager.get_user_records(uid)
         
         print(f"  记录数：{len(records)}")
         
