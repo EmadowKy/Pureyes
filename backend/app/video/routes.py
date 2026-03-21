@@ -1,8 +1,9 @@
 # backend/app/video/routes.py
-"""视频模块的 API 路由 - 提供视频文件访问"""
+"""视频模块的 API 路由 - 提供视频文件访问和管理"""
 
-from flask import Blueprint, send_file, abort
+from flask import Blueprint, send_file, abort, request
 import os
+from .views import upload_video, delete_video, rename_video, tick_video, get_video_list, get_single_video
 
 video_bp = Blueprint('video', __name__, url_prefix='/api/video')
 
@@ -51,3 +52,58 @@ def serve_video(video_path):
     except Exception as e:
         print(f"Error serving video: {e}")
         abort(500, description=f"Internal server error: {str(e)}")
+
+
+# 视频管理API路由
+@video_bp.route('/upload', methods=['POST'])
+def api_upload_video():
+    """
+    上传视频
+    POST /api/video/upload
+    """
+    return upload_video()
+
+
+@video_bp.route('/delete', methods=['POST'])
+def api_delete_video():
+    """
+    删除视频
+    POST /api/video/delete
+    """
+    return delete_video()
+
+
+@video_bp.route('/rename', methods=['POST'])
+def api_rename_video():
+    """
+    重命名视频
+    POST /api/video/rename
+    """
+    return rename_video()
+
+
+@video_bp.route('/tick', methods=['POST'])
+def api_tick_video():
+    """
+    勾选视频
+    POST /api/video/tick
+    """
+    return tick_video()
+
+
+@video_bp.route('/list', methods=['GET'])
+def api_get_video_list():
+    """
+    获取视频列表
+    GET /api/video/list
+    """
+    return get_video_list()
+
+
+@video_bp.route('/info', methods=['GET'])
+def api_get_single_video():
+    """
+    获取单个视频信息
+    GET /api/video/info?video_id=<id>
+    """
+    return get_single_video()

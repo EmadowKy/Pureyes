@@ -4,7 +4,7 @@
     <div class="user-bar">
       <div class="user-info">
         <span class="user-label">当前用户：</span>
-        <span class="username-display">{{ currentUsername }}</span>
+        <span class="username-display">用户</span>
       </div>
       <div class="actions">
         <button @click="goToProfile" class="btn-profile">用户信息</button>
@@ -29,28 +29,46 @@
         <div class="panel-header">
           <h2><el-icon><VideoPlay /></el-icon> 视频选择</h2>
           <p class="panel-desc">选择要分析的视频</p>
+          <el-button 
+            type="primary" 
+            size="small" 
+            @click="showUploadDialog = true"
+            class="btn-upload"
+          >
+            <el-icon><Upload /></el-icon> 上传视频
+          </el-button>
         </div>
 
         <div class="video-list">
           <div 
-            v-for="(video, index) in videoList" 
-            :key="index" 
+            v-for="video in videoList" 
+            :key="video.video_id" 
             class="video-item" 
-            :class="{ active: currentVideo && currentVideo.path === video.path }"
+            :class="{ active: currentVideo && currentVideo.video_id === video.video_id }"
             @click="playVideo(video)"
           >
-            <div class="video-icon-wrapper" :class="{ 'is-active': currentVideo && currentVideo.path === video.path }">
+            <div class="video-icon-wrapper" :class="{ 'is-active': currentVideo && currentVideo.video_id === video.video_id }">
               <el-icon><VideoPlay /></el-icon>
             </div>
             <div class="video-info">
-              <div class="video-title" :title="video.name">{{ video.name }}</div>
-              <div class="video-path">{{ video.path }}</div>
+              <div class="video-title" :title="video.video_name">{{ video.video_name }}</div>
+              <div class="video-path">{{ video.upload_time }}</div>
             </div>
-            <el-checkbox 
-              v-model="video.selected" 
-              class="video-checkbox"
-              @click.stop
-            ></el-checkbox>
+            <div class="video-actions">
+              <el-checkbox 
+                v-model="video.selected" 
+                class="video-checkbox"
+                @click.stop
+              ></el-checkbox>
+              <el-button 
+                size="small" 
+                type="danger" 
+                @click.stop="handleDeleteVideo(video)"
+                title="删除视频"
+              >
+                <el-icon><Delete /></el-icon>
+              </el-button>
+            </div>
           </div>
         </div>
 
@@ -86,7 +104,7 @@
             <video 
               v-if="currentVideo" 
               ref="videoRef" 
-              :src="getVideoUrl(currentVideo.path)" 
+              :src="getVideoUrl(currentVideo.video_path)" 
               controls 
               class="video-player"
             ></video>
@@ -271,7 +289,6 @@
     <!-- 提问对话框 -->
     <AskDialog 
       v-if="showAskDialog" 
-      :username="currentUsername"
       :preselected-videos="preselectedVideos"
       @close="showAskDialog = false; preselectedVideos = []"
       @submit="handleAskSubmit"
@@ -283,42 +300,67 @@
       :record="selectedRecord"
       @close="showDetailDialog = false"
     />
+
+    <!-- 视频上传对话框 -->
+    <el-dialog
+      v-model="showUploadDialog"
+      title="上传视频"
+      width="500px"
+    >
+      <div class="upload-form">
+        <el-form label-width="80px">
+          <el-form-item label="视频名称">
+            <el-input v-model="uploadVideoName" placeholder="请输入视频名称" />
+          </el-form-item>
+          <el-form-item label="视频文件">
+            <el-upload
+              class="upload-demo"
+              action=""
+              :auto-upload="false"
+              :on-change="handleFileChange"
+              :show-file-list="false"
+            >
+              <el-button size="small" type="primary">选择文件</el-button>
+              <template #tip>
+                <div class="el-upload__tip">
+                  请选择 MP4 格式的视频文件
+                </div>
+              </template>
+            </el-upload>
+            <div v-if="uploadVideoFile" class="file-info">
+              已选择: {{ uploadVideoFile.name }}
+            </div>
+          </el-form-item>
+        </el-form>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="showUploadDialog = false">取消</el-button>
+          <el-button type="primary" @click="handleUploadVideo">上传</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { qaApi } from '../api/qa'
+import { videoApi } from '../api/video'
 import AskDialog from '../components/qa/AskDialog.vue'
 import RecordDetailDialog from '../components/qa/RecordDetailDialog.vue'
-import { VideoPlay, Monitor, FullScreen, Close, Plus, ChatLineRound, Download } from '@element-plus/icons-vue'
+import { VideoPlay, Monitor, FullScreen, Close, Plus, ChatLineRound, Download, Upload, Delete } from '@element-plus/icons-vue'
 
 const router = useRouter()
 
-// --- 用户名管理 ---
-const currentUsername = ref('default_user')
-
 onMounted(() => {
-  const savedUsername = localStorage.getItem('qa_username')
-  if (savedUsername) {
-    currentUsername.value = savedUsername
-  }
   loadVideos()
   loadStats()
   loadRecords()
   startPolling()
 })
-
-function saveUsername() {
-  if (!currentUsername.value.trim()) {
-    currentUsername.value = 'default_user'
-  }
-  localStorage.setItem('qa_username', currentUsername.value.trim())
-  loadStats()
-  loadRecords()
-}
 
 // --- 跳转到用户信息页 ---
 function goToProfile() {
@@ -355,35 +397,88 @@ const currentVideo = ref(null)
 const videoRef = ref(null)
 const isPlayerFullscreen = ref(false)
 const playerWrapperRef = ref(null)
+const showUploadDialog = ref(false)
+const uploadVideoName = ref('')
+const uploadVideoFile = ref(null)
 
-// 示例视频列表
-const EXAMPLE_VIDEOS = [
-  {
-    name: '示例视频 1',
-    path: '/home/emadow/Pureyes/backend/example/1.mp4',
-    selected: true
-  },
-  {
-    name: '示例视频 2',
-    path: '/home/emadow/Pureyes/backend/example/2.mp4',
-    selected: false
-  }
-]
-
-function loadVideos() {
-  videoList.value = EXAMPLE_VIDEOS
-  if (videoList.value.length > 0) {
-    currentVideo.value = videoList.value[0]
+async function loadVideos() {
+  try {
+    const response = await videoApi.getVideoList()
+    if ((response.code === 0 || response.code === 200) && response.data) {
+      videoList.value = response.data.videos.map(video => ({
+        ...video,
+        selected: false
+      }))
+      if (videoList.value.length > 0) {
+        currentVideo.value = videoList.value[0]
+      }
+    }
+  } catch (error) {
+    console.error('加载视频列表失败:', error)
+    ElMessage.error('加载视频列表失败')
   }
 }
 
-function getVideoUrl(filePath) {
-  // 将本地路径转换为 API 路径
-  if (filePath.includes('/backend/example/')) {
-    const filename = filePath.split('/').pop()
-    return `/api/video/example/${filename}`
+function getVideoUrl(videoPath) {
+  // 从完整路径中提取文件名
+  const filename = videoPath.split('/').pop()
+  return `/api/video/uploads/${filename}`
+}
+
+// 视频上传处理
+function handleFileChange(file, fileList) {
+  if (file) {
+    uploadVideoFile.value = file.raw
+    if (!uploadVideoName.value) {
+      uploadVideoName.value = file.name.replace(/\.[^/.]+$/, "")
+    }
   }
-  return filePath
+}
+
+async function handleUploadVideo() {
+  if (!uploadVideoName.value || !uploadVideoFile.value) {
+    ElMessage.warning('请填写视频名称并选择视频文件')
+    return
+  }
+
+  try {
+    await videoApi.uploadVideo(uploadVideoName.value, uploadVideoFile.value)
+    ElMessage.success('视频上传成功')
+    showUploadDialog.value = false
+    uploadVideoName.value = ''
+    uploadVideoFile.value = null
+    await loadVideos()
+  } catch (error) {
+    console.error('视频上传失败:', error)
+    ElMessage.error('视频上传失败')
+  }
+}
+
+// 视频删除处理
+async function handleDeleteVideo(video) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除视频 "${video.video_name}" 吗？`,
+      '删除视频',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    await videoApi.deleteVideo(video.video_id)
+    ElMessage.success('视频删除成功')
+    await loadVideos()
+    if (currentVideo.value && currentVideo.value.video_id === video.video_id) {
+      currentVideo.value = videoList.value.length > 0 ? videoList.value[0] : null
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('视频删除失败:', error)
+      ElMessage.error('视频删除失败')
+    }
+  }
 }
 
 function playVideo(video) {
@@ -419,7 +514,7 @@ onUnmounted(() => {
 
 async function checkProcessingTasks() {
   try {
-    const res = await qaApi.getRecords({ page: 1, limit: 100, username: currentUsername.value })
+    const res = await qaApi.getRecords({ page: 1, limit: 100 })
     if (res.data) {
       const processingRecords = res.data.records.filter(r => r.status === 'processing')
       
@@ -492,8 +587,7 @@ async function loadRecords() {
   try {
     const res = await qaApi.getRecords({
       page: currentPage.value,
-      limit: pageSize,
-      username: currentUsername.value
+      limit: pageSize
     })
     if (res.data) {
       records.value = res.data.records || []
@@ -784,6 +878,9 @@ function truncateAnswer(answer, maxLength = 100) {
 .panel-header {
   padding: 20px;
   border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .panel-header h2 {
@@ -793,12 +890,37 @@ function truncateAnswer(answer, maxLength = 100) {
   display: flex;
   align-items: center;
   gap: 8px;
+  justify-content: space-between;
 }
 
 .panel-desc {
-  margin: 8px 0 0 0;
+  margin: 0;
   font-size: 13px;
   color: #999;
+}
+
+.btn-upload {
+  align-self: flex-start;
+}
+
+.video-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.upload-form {
+  padding: 20px 0;
+}
+
+.file-info {
+  margin-top: 12px;
+  font-size: 14px;
+  color: #666;
+  background: #f5f7fa;
+  padding: 8px 12px;
+  border-radius: 4px;
 }
 
 .video-list {

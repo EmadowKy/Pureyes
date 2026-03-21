@@ -9,18 +9,12 @@ const api = axios.create({
   }
 })
 
-// 请求拦截器 - 添加 token 和用户名
+// 请求拦截器 - 添加 token
 api.interceptors.request.use(
   config => {
     const token = localStorage.getItem('access_token') || localStorage.getItem('token')
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`
-    }
-    
-    // 添加用户名到 header（如果存在）
-    const username = localStorage.getItem('qa_username')
-    if (username) {
-      config.headers['X-Username'] = username
     }
     
     return config
@@ -53,7 +47,6 @@ api.interceptors.response.use(
       localStorage.removeItem('access_token')
       localStorage.removeItem('refresh_token')
       localStorage.removeItem('user_info')
-      localStorage.removeItem('qa_username')
       window.location.href = '/login'
     }
 
@@ -78,8 +71,7 @@ export const qaApi = {
     const timeout = options.timeout || 300000 // 默认 5 分钟超时
     return api.post('/qa/ask', {
       question: data.question,
-      video_paths: data.video_paths,
-      username: data.username
+      video_paths: data.video_paths
     }, {
       timeout
     })

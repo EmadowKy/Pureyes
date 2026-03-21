@@ -33,6 +33,12 @@ def create_app():
     from app.video_routes import video_bp
     app.register_blueprint(video_bp)
     
+    # 注册视频管理路由
+    from app.video.routes import video_bp
+    # 为蓝图指定一个唯一的名称
+    video_bp.name = 'video_manage'
+    app.register_blueprint(video_bp)
+    
     # 健康检查接口
     @app.get("/api/health")
     def health():
@@ -40,6 +46,8 @@ def create_app():
     
     # 创建数据库表
     with app.app_context():
+        # 导入所有模型，确保它们被注册到SQLAlchemy
+        from app.video.views import Video
         db.create_all()
     
     return app

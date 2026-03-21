@@ -51,34 +51,34 @@
             选择视频 <span class="required">*</span>
           </label>
           <div class="video-selector">
-            <div v-if="availableVideos.length === 0" class="no-videos">
+            <div v-if="loading" class="loading-videos">
+              <p>加载视频中...</p>
+            </div>
+            <div v-else-if="availableVideos.length === 0" class="no-videos">
               <p>暂无可用视频</p>
-              <p class="hint">请确保 example 目录中有视频文件</p>
+              <p class="hint">请先上传视频</p>
             </div>
             <div v-else class="video-list">
               <label 
-                v-for="(video, index) in availableVideos" 
-                :key="index" 
+                v-for="video in availableVideos" 
+                :key="video.video_id" 
                 class="video-item"
               >
                 <input
                   type="checkbox"
-                  :value="video.path"
+                  :value="video.video_path"
                   v-model="formData.video_paths"
                   :disabled="submitting"
                 />
                 <div class="video-info">
-                  <span class="video-name">{{ video.name }}</span>
-                  <span class="video-path">{{ video.path }}</span>
+                  <span class="video-name">{{ video.video_name }}</span>
+                  <span class="video-path">{{ video.upload_time }}</span>
                 </div>
               </label>
             </div>
           </div>
           <div v-if="selectedCount > 0" class="selected-count">
             已选择 {{ selectedCount }} 个视频
-          </div>
-          <div class="example-hint">
-            💡 当前使用 <code>backend/example/</code> 目录中的示例视频
           </div>
         </div>
 
@@ -107,12 +107,10 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { videoApi } from '../../api/video'
+import { ElMessage } from 'element-plus'
 
 const props = defineProps({
-  username: {
-    type: String,
-    default: 'default_user'
-  },
   submitting: {
     type: Boolean,
     default: false
@@ -133,6 +131,7 @@ const formData = ref({
 
 // 状态
 const availableVideos = ref([])
+const loading = ref(false)
 
 // 计算属性
 const selectedCount = computed(() => formData.value.video_paths.length)
@@ -141,18 +140,6 @@ const canSubmit = computed(() => {
          formData.value.question.length <= 500 &&
          formData.value.video_paths.length > 0
 })
-
-// 示例视频列表（在视频模块完成前使用）
-const EXAMPLE_VIDEOS = [
-  {
-    name: '示例视频 1',
-    path: '/home/emadow/Pureyes/backend/example/1.mp4'
-  },
-  {
-    name: '示例视频 2',
-    path: '/home/emadow/Pureyes/backend/example/2.mp4'
-  }
-]
 
 // 加载可用视频列表
 onMounted(async () => {
@@ -165,12 +152,22 @@ onMounted(async () => {
 })
 
 async function loadVideos() {
-  // 在视频模块完成前，直接使用示例视频
-  availableVideos.value = EXAMPLE_VIDEOS
-  
-  // 默认勾选第一个视频（如果没有预选择）
-  if (availableVideos.value.length > 0 && (!props.preselectedVideos || props.preselectedVideos.length === 0)) {
-    formData.value.video_paths = [availableVideos.value[0].path]
+  loading.value = true
+  try {
+    const response = await videoApi.getVideoList()
+    if (response.code === 0 && response.data) {
+      availableVideos.value = response.data.videos
+      
+      // 默认勾选第一个视频（如果没有预选择）
+      if (availableVideos.value.length > 0 && (!props.preselectedVideos || props.preselectedVideos.length === 0)) {
+        formData.value.video_paths = [availableVideos.value[0].video_path]
+      }
+    }
+  } catch (error) {
+    console.error('加载视频列表失败:', error)
+    ElMessage.error('加载视频列表失败')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -180,8 +177,7 @@ function handleSubmit() {
   
   emit('submit', {
     question: formData.value.question.trim(),
-    video_paths: [...formData.value.video_paths],
-    username: props.username
+    video_paths: [...formData.value.video_paths]
   })
 }
 </script>
@@ -377,10 +373,24 @@ function handleSubmit() {
   overflow-y: auto;
 }
 
-.no-videos {
+.no-videos,
+.loading-videos {
   padding: 40px 20px;
   text-align: center;
   color: #999;
+}
+
+.loading-videos {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 .hint {
