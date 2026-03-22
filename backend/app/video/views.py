@@ -1,5 +1,6 @@
 import os
 import uuid
+import cv2
 from flask import request
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from datetime import datetime
@@ -15,15 +16,20 @@ class Video(db.Model):
     video_name = db.Column(db.String, nullable = False)
     video_path = db.Column(db.String)
     upload_time = db.Column(db.DateTime, default = datetime.now)
+    duration = db.Column(db.Float, default = 0.0)  # 视频时长，单位秒
     is_ticked = db.Column(db.Boolean, default = False)
     
     def to_dict(self):
+        # 将时长转换为分:秒格式
+        minutes = int(self.duration // 60)
+        seconds = int(self.duration % 60)
+        duration_str = f"{minutes:02d}:{seconds:02d}"
         return {
             "video_id": self.video_id,
             "uid": self.uid,
             "video_name": self.video_name,
             "video_path": self.video_path,
-            "upload_time": self.upload_time.strftime("%Y-%m-%d %H:%M:%S")
+            "duration": duration_str
         }
 
 # 视频存储路径
@@ -62,12 +68,30 @@ def upload_video():
         # 保存视频到服务器
         video_file.save(video_path) 
 
+        # 计算视频时长
+        def get_video_duration(video_path):
+            try:
+                cap = cv2.VideoCapture(video_path)
+                if not cap.isOpened():
+                    return 0.0
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+                duration = frame_count / fps if fps > 0 else 0.0
+                cap.release()
+                return duration
+            except Exception as e:
+                print(f"计算视频时长失败: {str(e)}")
+                return 0.0
+
+        duration = get_video_duration(video_path)
+
         #写入数据库
         video = Video(
             video_id = video_id,
             uid = uid,
             video_name = video_name,
-            video_path = video_path
+            video_path = video_path,
+            duration = duration
         )
         db.session.add(video) # 将新创建的视频对象添加到数据库会话中，准备进行数据库操作。
         db.session.commit() # 提交数据库会话，将更改保存到数据库中。
