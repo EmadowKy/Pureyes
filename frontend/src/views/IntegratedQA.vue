@@ -132,7 +132,7 @@
         <!-- 记录详情视图 -->
         <div v-if="viewRecordDetail" class="record-detail-panel">
           <div class="detail-header">
-            <el-button @click="() => { viewRecordDetail = null; relatedVideos.value = [] }" size="small" class="back-button">
+            <el-button @click="() => { viewRecordDetail = null; relatedVideos = [] }" size="small" class="back-button">
               <el-icon><ArrowLeft /></el-icon> 返回列表
             </el-button>
             <h2><el-icon><ChatLineRound /></el-icon> 问答详情</h2>
