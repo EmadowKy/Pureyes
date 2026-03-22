@@ -43,7 +43,10 @@
             v-for="video in videoList" 
             :key="video.video_id" 
             class="video-item" 
-            :class="{ active: currentVideo && currentVideo.video_id === video.video_id }"
+            :class="{ 
+              active: currentVideo && currentVideo.video_id === video.video_id,
+              'related-video': isRelatedVideo(video.video_path)
+            }"
             @click="playVideo(video)"
           >
             <div class="video-icon-wrapper" :class="{ 'is-active': currentVideo && currentVideo.video_id === video.video_id }">
@@ -121,103 +124,173 @@
           </div>
         </div>
 
-        <!-- 快捷操作区 -->
-        <div class="quick-actions">
-          <el-button @click="askWithCurrentVideo" :disabled="!currentVideo">
-            <el-icon><ChatLineRound /></el-icon> 快速提问当前视频
-          </el-button>
-        </div>
+
       </section>
 
       <!-- 右侧：问答区域 -->
       <section class="qa-section">
-        <!-- 提问面板 -->
-        <div class="question-panel">
-          <div class="question-card">
-            <div class="question-header">
-              <h2><el-icon><ChatLineRound /></el-icon> 提问</h2>
-              <p class="question-desc">输入问题并选择视频进行分析</p>
+        <!-- 记录详情视图 -->
+        <div v-if="viewRecordDetail" class="record-detail-panel">
+          <div class="detail-header">
+            <el-button @click="() => { viewRecordDetail = null; relatedVideos.value = [] }" size="small" class="back-button">
+              <el-icon><ArrowLeft /></el-icon> 返回列表
+            </el-button>
+            <h2><el-icon><ChatLineRound /></el-icon> 问答详情</h2>
+          </div>
+          
+          <div class="detail-content">
+            <div class="detail-meta">
+              <span class="detail-time">{{ formatTime(viewRecordDetail.timestamp) }}</span>
+              <span 
+                v-if="viewRecordDetail.status === 'processing'"
+                class="detail-status status-processing"
+              >
+                <span class="pulse-dot"></span>
+                进行中
+              </span>
+              <span 
+                v-else-if="viewRecordDetail.status === 'completed' && viewRecordDetail.success !== false"
+                class="detail-status status-success"
+              >
+                成功
+              </span>
+              <span 
+                v-else-if="viewRecordDetail.status === 'failed' || viewRecordDetail.success === false"
+                class="detail-status status-failure"
+              >
+                失败
+              </span>
             </div>
-            <div class="question-input-area">
-              <el-input
-                v-model="questionInput"
-                placeholder="请输入您的问题..."
-                class="question-input"
-                type="textarea"
-                :rows="3"
-              />
-              <div class="question-actions">
-                <span class="selected-count">已选择 {{ selectedVideos.length }} 个视频</span>
-                <el-button 
-                  type="primary" 
-                  @click="submitQuestion"
-                  :disabled="!questionInput.trim() || selectedVideos.length === 0"
-                >
-                  提问
-                </el-button>
+            
+            <div class="detail-question">
+              <h3>问题</h3>
+              <div class="question-content">{{ viewRecordDetail.question }}</div>
+            </div>
+            
+            <div class="detail-answer">
+              <h3>回答</h3>
+              <div class="answer-content">
+                <span v-if="viewRecordDetail.status === 'processing'" class="processing-text">
+                  <span class="spinner-small"></span>
+                  AI 正在分析中...
+                </span>
+                <span v-else>{{ viewRecordDetail.model_result?.answer || viewRecordDetail.model_result?.predicted_answer || '无回答' }}</span>
               </div>
             </div>
-          </div>
-        </div>
-
-        <!-- 问答记录面板 -->
-        <div class="records-panel">
-          <!-- 顶部统计栏 -->
-          <div class="stats-bar">
-            <div class="stat-item">
-              <span class="stat-label">总记录数</span>
-              <span class="stat-value">{{ stats.total }}</span>
+            
+            <div class="detail-videos">
+              <h3>相关视频</h3>
+              <div class="video-list">
+                <span 
+                  v-for="(videoPath, index) in viewRecordDetail.video_paths.filter(vp => getVideoNameByPath(vp))" 
+                  :key="index" 
+                  class="video-tag"
+                >
+                  {{ getVideoNameByPath(videoPath) }}
+                </span>
+              </div>
+              <div v-if="getDeletedVideoCount() > 0" class="deleted-videos-info">
+                <span class="deleted-count">还有 {{ getDeletedVideoCount() }} 个被删除的视频</span>
+              </div>
             </div>
-            <div class="stat-item success">
-              <span class="stat-label">成功</span>
-              <span class="stat-value">{{ stats.success }}</span>
-            </div>
-            <div class="stat-item failure">
-              <span class="stat-label">失败</span>
-              <span class="stat-value">{{ stats.failure }}</span>
-            </div>
-            <div v-if="stats.processing > 0" class="stat-item processing">
-              <span class="stat-label">进行中</span>
-              <span class="stat-value">{{ stats.processing }}</span>
-            </div>
-            <div class="stat-actions">
-              <el-button @click="handleExport" size="small" title="导出记录">
-                <el-icon><Download /></el-icon>
+            
+            <div class="detail-actions">
+              <el-button @click="deleteRecord(viewRecordDetail.record_id)" type="danger" size="small">
+                <el-icon><Delete /></el-icon> 删除记录
               </el-button>
             </div>
           </div>
-
-          <!-- 搜索和筛选 -->
-          <div class="search-bar">
-            <input 
-              v-model="searchQuery" 
-              placeholder="搜索问题或答案..." 
-              class="search-input"
-              @input="handleSearch"
-            />
-            <select v-model="filterStatus" class="filter-select" @change="handleFilter">
-              <option value="all">全部状态</option>
-              <option value="processing">进行中</option>
-              <option value="success">成功</option>
-              <option value="failure">失败</option>
-            </select>
+        </div>
+        
+        <!-- 提问和记录列表视图 -->
+        <div v-else>
+          <!-- 提问面板 -->
+          <div class="question-panel">
+            <div class="question-card">
+              <div class="question-header">
+                <h2><el-icon><ChatLineRound /></el-icon> 提问</h2>
+                <p class="question-desc">输入问题并选择视频进行分析</p>
+              </div>
+              <div class="question-input-area">
+                <el-input
+                  v-model="questionInput"
+                  placeholder="请输入您的问题..."
+                  class="question-input"
+                  type="textarea"
+                  :rows="3"
+                />
+                <div class="question-actions">
+                  <span class="selected-count">已选择 {{ selectedVideos.length }} 个视频</span>
+                  <el-button 
+                    type="primary" 
+                    @click="submitQuestion"
+                    :disabled="!questionInput.trim() || selectedVideos.length === 0"
+                  >
+                    提问
+                  </el-button>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <!-- 问答记录列表 -->
-          <div class="records-list" ref="recordsListRef">
-            <div v-if="loading" class="loading-state">
-              <div class="spinner"></div>
-              <p>加载中...</p>
+          <!-- 问答记录面板 -->
+          <div class="records-panel">
+            <!-- 顶部统计栏 -->
+            <div class="stats-bar">
+              <div class="stat-item">
+                <span class="stat-label">总记录数</span>
+                <span class="stat-value">{{ stats.total }}</span>
+              </div>
+              <div class="stat-item success">
+                <span class="stat-label">成功</span>
+                <span class="stat-value">{{ stats.success }}</span>
+              </div>
+              <div class="stat-item failure">
+                <span class="stat-label">失败</span>
+                <span class="stat-value">{{ stats.failure }}</span>
+              </div>
+              <div v-if="stats.processing > 0" class="stat-item processing">
+                <span class="stat-label">进行中</span>
+                <span class="stat-value">{{ stats.processing }}</span>
+              </div>
+              <div class="stat-actions">
+                <el-button @click="handleExport" size="small" title="导出记录">
+                  <el-icon><Download /></el-icon>
+                </el-button>
+              </div>
             </div>
 
-            <div v-else-if="records.length === 0" class="empty-state">
-              <div class="empty-icon">💬</div>
-              <p>暂无问答记录</p>
-              <p>请在上方提问面板输入问题并选择视频开始问答</p>
+            <!-- 搜索和筛选 -->
+            <div class="search-bar">
+              <input 
+                v-model="searchQuery" 
+                placeholder="搜索问题或答案..." 
+                class="search-input"
+                @input="handleSearch"
+              />
+              <select v-model="filterStatus" class="filter-select" @change="handleFilter">
+                <option value="all">全部状态</option>
+                <option value="processing">进行中</option>
+                <option value="success">成功</option>
+                <option value="failure">失败</option>
+              </select>
             </div>
 
-            <div v-else class="records-grid">
-              <div 
+            <!-- 问答记录列表 -->
+            <div class="records-list" ref="recordsListRef">
+              <div v-if="loading" class="loading-state">
+                <div class="spinner"></div>
+                <p>加载中...</p>
+              </div>
+
+              <div v-else-if="records.length === 0" class="empty-state">
+                <div class="empty-icon">💬</div>
+                <p>暂无问答记录</p>
+                <p>请在上方提问面板输入问题并选择视频开始问答</p>
+              </div>
+
+              <div v-else class="records-grid">
+                <div 
                 v-for="record in records" 
                 :key="record.record_id" 
                 class="record-card"
@@ -226,94 +299,91 @@
                   'record-failure': record.status === 'failed' || record.success === false,
                   'record-success': record.status === 'completed' && record.success !== false
                 }"
+                @click="viewRecord(record)"
               >
-                <div class="record-header">
-                  <div class="record-meta">
-                    <span class="record-time">{{ formatTime(record.timestamp) }}</span>
-                    <span 
-                      v-if="record.status === 'processing'"
-                      class="record-status status-processing"
-                    >
-                      <span class="pulse-dot"></span>
-                      进行中
-                    </span>
-                    <span 
-                      v-else-if="record.status === 'completed' && record.success !== false"
-                      class="record-status status-success"
-                    >
-                      成功
-                    </span>
-                    <span 
-                      v-else-if="record.status === 'failed' || record.success === false"
-                      class="record-status status-failure"
-                    >
-                      失败
-                    </span>
-                  </div>
-                  <div class="record-actions">
-                    <button 
-                      v-if="record.status !== 'processing'"
-                      @click="viewRecord(record)" 
-                      class="btn-icon" 
-                      title="查看详情"
-                    >
-                      👁
-                    </button>
-                    <button @click="deleteRecord(record.record_id)" class="btn-icon" title="删除">
-                      🗑
-                    </button>
-                  </div>
-                </div>
-                
-                <div class="record-content">
-                  <div class="record-question">
-                    <span class="label">问：</span>
-                    <span class="text">{{ record.question }}</span>
-                  </div>
-                  <div class="record-answer">
-                    <span class="label">答：</span>
-                    <span class="text answer-text">
-                      <span v-if="record.status === 'processing'" class="processing-text">
-                        <span class="spinner-small"></span>
-                        AI 正在分析中...
+                  <div class="record-header">
+                    <div class="record-meta">
+                      <span class="record-time">{{ formatTime(record.timestamp) }}</span>
+                      <span 
+                        v-if="record.status === 'processing'"
+                        class="record-status status-processing"
+                      >
+                        <span class="pulse-dot"></span>
+                        进行中
                       </span>
-                      <span v-else>{{ truncateAnswer(record.model_result?.answer || record.model_result?.predicted_answer || '无回答') }}</span>
-                    </span>
+                      <span 
+                        v-else-if="record.status === 'completed' && record.success !== false"
+                        class="record-status status-success"
+                      >
+                        成功
+                      </span>
+                      <span 
+                        v-else-if="record.status === 'failed' || record.success === false"
+                        class="record-status status-failure"
+                      >
+                        失败
+                      </span>
+                    </div>
+                    <div class="record-actions">
+                      <button @click.stop="deleteRecord(record.record_id)" class="btn-icon" title="删除">
+                        🗑
+                      </button>
+                    </div>
                   </div>
-                </div>
+                  
+                  <div class="record-content">
+                    <div class="record-question">
+                      <span class="label">问：</span>
+                      <span class="text">{{ record.question }}</span>
+                    </div>
+                    <div class="record-answer">
+                      <span class="label">答：</span>
+                      <span class="text answer-text">
+                        <span v-if="record.status === 'processing'" class="processing-text">
+                          <span class="spinner-small"></span>
+                          AI 正在分析中...
+                        </span>
+                        <span v-else>{{ truncateAnswer(record.model_result?.answer || record.model_result?.predicted_answer || '无回答') }}</span>
+                      </span>
+                    </div>
+                  </div>
 
-                <div class="record-footer">
-                  <div class="video-tags">
-                    <span 
-                      v-for="(video, index) in record.video_paths" 
-                      :key="index" 
-                      class="video-tag"
-                    >
-                      视频 {{ index + 1 }}
-                    </span>
+                  <div class="record-footer">
+                    <div class="video-tags">
+                      <span 
+                        v-for="(videoPath, index) in record.video_paths.filter(vp => getVideoNameByPath(vp))" 
+                        :key="index" 
+                        class="video-tag"
+                      >
+                        {{ getVideoNameByPath(videoPath) }}
+                      </span>
+                      <span v-if="record.video_paths && record.video_paths.filter(vp => !getVideoNameByPath(vp)).length > 0" class="deleted-tag">
+                        +{{ record.video_paths.filter(vp => !getVideoNameByPath(vp)).length }} 个视频已删除
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <!-- 分页 -->
-          <div v-if="totalPages > 1" class="pagination">
-            <el-button 
-              :disabled="currentPage === 1" 
-              @click="changePage(currentPage - 1)"
-              size="small"
-            >
-              上一页
-            </el-button>
-            <span class="page-info">第 {{ currentPage }} / {{ totalPages }} 页</span>
-            <el-button 
-              :disabled="currentPage === totalPages" 
-              @click="changePage(currentPage + 1)"
-              size="small"
-            >
-              下一页
-            </el-button>
+            <!-- 分页 -->
+            <div v-if="totalPages > 1" class="pagination">
+              <el-button 
+                :disabled="currentPage === 1" 
+                @click="changePage(currentPage - 1)"
+                size="small"
+              >
+                上一页
+              </el-button>
+              <span class="page-info">第 {{ currentPage }} / {{ totalPages }} 页</span>
+              <el-button 
+                :disabled="currentPage === totalPages" 
+                @click="changePage(currentPage + 1)"
+                size="small"
+              >
+                下一页
+              </el-button>
+            </div>
           </div>
         </div>
       </section>
@@ -321,12 +391,7 @@
 
 
 
-    <!-- 详情对话框 -->
-    <RecordDetailDialog
-      v-if="showDetailDialog"
-      :record="selectedRecord"
-      @close="showDetailDialog = false"
-    />
+
 
     <!-- 视频上传对话框 -->
     <el-dialog
@@ -401,8 +466,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { qaApi } from '../api/qa'
 import { videoApi } from '../api/video'
 import { getAuthInfo } from '../api/auth'
-import RecordDetailDialog from '../components/qa/RecordDetailDialog.vue'
-import { VideoPlay, Monitor, FullScreen, Close, ChatLineRound, Download, Upload, Delete, Edit } from '@element-plus/icons-vue'
+
+import { VideoPlay, Monitor, FullScreen, Close, ChatLineRound, Download, Upload, Delete, Edit, ArrowLeft } from '@element-plus/icons-vue'
 
 const router = useRouter()
 
@@ -478,16 +543,44 @@ const newVideoName = ref('')
 
 async function loadVideos() {
   try {
+    console.log('=== 开始加载视频列表 ===')
     const response = await videoApi.getVideoList()
-    if ((response.code === 0 || response.code === 200) && response.data) {
-      videoList.value = response.data.videos.map(video => ({
-        ...video,
-        selected: false
-      }))
-      if (videoList.value.length > 0) {
-        currentVideo.value = videoList.value[0]
-      }
+    console.log('加载视频列表响应:', response)
+    
+    // 检查response是否存在
+    if (!response) {
+      console.error('视频列表响应为空')
+      ElMessage.error('视频列表响应为空')
+      return
     }
+    
+    // 检查response.data是否存在
+    if (!response.data) {
+      console.error('视频列表数据为空')
+      ElMessage.error('视频列表数据为空')
+      return
+    }
+    
+    // 检查response.data.videos是否存在
+    if (!response.data.videos || !Array.isArray(response.data.videos)) {
+      console.error('视频列表格式错误:', response.data)
+      ElMessage.error('视频列表格式错误')
+      return
+    }
+    
+    // 加载视频列表
+    videoList.value = response.data.videos.map(video => ({
+      ...video,
+      selected: false
+    }))
+    
+    if (videoList.value.length > 0) {
+      currentVideo.value = videoList.value[0]
+    }
+    
+    console.log('视频列表加载成功，长度:', videoList.value.length)
+    console.log('视频列表详情:', videoList.value)
+    console.log('=== 视频列表加载完成 ===')
   } catch (error) {
     console.error('加载视频列表失败:', error)
     ElMessage.error('加载视频列表失败')
@@ -653,6 +746,8 @@ async function checkProcessingTasks() {
 const loading = ref(false)
 const showDetailDialog = ref(false)
 const selectedRecord = ref(null)
+const viewRecordDetail = ref(null) // 当前查看的记录详情
+const relatedVideos = ref([]) // 当前记录的相关视频路径
 const searchQuery = ref('')
 const filterStatus = ref('all')
 const questionInput = ref('')
@@ -672,32 +767,52 @@ const totalPages = ref(1)
 async function loadStats() {
   try {
     const res = await qaApi.getSummary()
-    if (res.data) {
-      stats.total = res.data.total_records || 0
-      stats.success = res.data.success_count || 0
-      stats.failure = res.data.failure_count || 0
-      stats.processing = res.data.processing_count || 0
-    }
+    console.log('获取统计数据成功:', res)
+    // 直接使用res，不再检查res.data
+    stats.total = res.total_records || res.data?.total_records || 0
+    stats.success = res.success_count || res.data?.success_count || 0
+    stats.failure = res.failure_count || res.data?.failure_count || 0
+    stats.processing = res.processing_count || res.data?.processing_count || 0
   } catch (error) {
     console.error('加载统计数据失败:', error)
+    // 确保即使失败也重置统计数据
+    stats.total = 0
+    stats.success = 0
+    stats.failure = 0
+    stats.processing = 0
   }
 }
 
 async function loadRecords() {
+  console.log('开始加载记录...')
   loading.value = true
   try {
+    // 确保视频列表已经加载
+    console.log('当前视频列表长度:', videoList.value.length)
+    if (videoList.value.length === 0) {
+      console.log('视频列表为空，开始加载...')
+      await loadVideos()
+      console.log('视频列表加载完成，长度:', videoList.value.length)
+    }
+    
+    console.log('调用qaApi.getRecords:', { page: currentPage.value, limit: pageSize })
     const res = await qaApi.getRecords({
       page: currentPage.value,
       limit: pageSize
     })
-    if (res.data) {
-      records.value = res.data.records || []
-      totalPages.value = Math.ceil((res.data.total || 0) / pageSize)
-    }
+    console.log('获取记录成功:', res)
+    // 直接使用res，不再检查res.data
+    records.value = res.records || res.data?.records || []
+    totalPages.value = Math.ceil((res.total || res.data?.total || 0) / pageSize)
+    console.log('记录数据:', records.value)
   } catch (error) {
     console.error('加载记录失败:', error)
     showNotificationBanner('加载记录失败', 'error')
+    // 确保即使失败也清空记录，避免显示旧数据
+    records.value = []
+    totalPages.value = 1
   } finally {
+    console.log('加载记录完成，设置loading为false')
     loading.value = false
   }
 }
@@ -710,9 +825,41 @@ function handleFilter() {
   console.log('筛选状态:', filterStatus.value)
 }
 
-function viewRecord(record) {
-  selectedRecord.value = record
-  showDetailDialog.value = true
+async function viewRecord(record) {
+  console.log('=== 开始查看记录详情 ===')
+  console.log('记录ID:', record.record_id)
+  
+  // 确保视频列表已经加载
+  console.log('当前视频列表长度:', videoList.value.length)
+  if (videoList.value.length === 0) {
+    console.log('视频列表为空，开始加载...')
+    await loadVideos()
+    console.log('视频列表加载完成，长度:', videoList.value.length)
+  }
+  
+  // 保存记录详情
+  viewRecordDetail.value = record
+  relatedVideos.value = record.video_paths || []
+  
+  console.log('记录详情:', record)
+  console.log('相关视频路径:', relatedVideos.value)
+  console.log('视频列表:', videoList.value)
+  
+  // 测试getVideoNameByPath函数
+  if (record.video_paths && record.video_paths.length > 0) {
+    console.log('=== 测试getVideoNameByPath函数 ===')
+    record.video_paths.forEach((videoPath, index) => {
+      console.log(`\n视频路径 ${index}: ${videoPath}`)
+      const videoName = getVideoNameByPath(videoPath)
+      console.log(`视频名称 ${index}: ${videoName}`)
+    })
+  }
+  
+  // 测试getDeletedVideoCount函数
+  console.log('=== 测试getDeletedVideoCount函数 ===')
+  const deletedCount = getDeletedVideoCount()
+  console.log('被删除视频数量:', deletedCount)
+  console.log('=== 查看记录详情完成 ===')
 }
 
 async function deleteRecord(recordId) {
@@ -758,25 +905,7 @@ async function submitQuestion() {
   }
 }
 
-function askWithCurrentVideo() {
-  if (!currentVideo.value) {
-    ElMessage.warning('请先选择视频')
-    return
-  }
-  
-  // 自动选择当前视频
-  videoList.value.forEach(v => {
-    v.selected = v.video_id === currentVideo.value.video_id
-  })
-  
-  // 聚焦到问题输入框
-  setTimeout(() => {
-    const inputEl = document.querySelector('.question-input textarea')
-    if (inputEl) {
-      inputEl.focus()
-    }
-  }, 100)
-}
+
 
 async function handleExport() {
   try {
@@ -822,6 +951,124 @@ function truncateAnswer(answer, maxLength = 100) {
   if (typeof answer !== 'string') return '无回答'
   if (answer.length <= maxLength) return answer
   return answer.substring(0, maxLength) + '...'
+}
+
+// 从视频路径中提取视频uid
+function getVideoIdFromPath(videoPath) {
+  try {
+    if (!videoPath) return null
+    const filename = videoPath.split('/').pop()
+    if (!filename) return null
+    return filename.split('.')[0] // 提取文件名中的video_id部分
+  } catch (error) {
+    console.error('提取视频uid时出错:', error)
+    return null
+  }
+}
+
+// 根据视频路径获取视频名称
+function getVideoNameByPath(videoPath) {
+  try {
+    console.log('=== 获取视频名称开始 ===')
+    console.log('视频路径:', videoPath)
+    console.log('视频列表长度:', videoList.value.length)
+    console.log('视频列表:', videoList.value)
+    
+    if (!videoPath) {
+      console.log('视频路径为空')
+      return null
+    }
+    
+    // 从视频路径中提取视频uid
+    const videoId = getVideoIdFromPath(videoPath)
+    console.log('提取的video_id:', videoId)
+    
+    // 通过video_id查找视频
+    if (videoId) {
+      console.log('开始通过video_id查找视频...')
+      const video = videoList.value.find(v => {
+        console.log('比较视频:', v.video_id, '===', videoId)
+        return v.video_id === videoId
+      })
+      console.log('通过video_id匹配结果:', video)
+      if (video) {
+        console.log('找到视频，名称:', video.video_name)
+        return video.video_name
+      } else {
+        console.log('未找到匹配的视频')
+      }
+    }
+    
+    // 如果没有找到，尝试通过完整路径匹配
+    console.log('尝试通过完整路径匹配...')
+    const video = videoList.value.find(v => v.video_path === videoPath)
+    console.log('通过完整路径匹配结果:', video)
+    
+    console.log('最终视频名称:', video ? video.video_name : null)
+    console.log('=== 获取视频名称结束 ===')
+    return video ? video.video_name : null // 当视频不存在时返回null
+  } catch (error) {
+    console.error('获取视频名称时出错:', error)
+    return null
+  }
+}
+
+// 检查视频是否是当前记录的相关视频
+function isRelatedVideo(videoPath) {
+  try {
+    if (!videoPath) {
+      return false
+    }
+    
+    // 尝试通过完整路径匹配
+    if (relatedVideos.value.includes(videoPath)) {
+      return true
+    }
+    
+    // 如果没有找到，尝试通过video_id匹配
+    const videoId = getVideoIdFromPath(videoPath)
+    if (videoId) {
+      // 检查relatedVideos中是否有包含相同video_id的路径
+      return relatedVideos.value.some(relatedPath => {
+        try {
+          const relatedVideoId = getVideoIdFromPath(relatedPath)
+          return relatedVideoId === videoId
+        } catch (error) {
+          console.error('检查相关视频时出错:', error)
+          return false
+        }
+      })
+    }
+    return false
+  } catch (error) {
+    console.error('检查视频是否是相关视频时出错:', error)
+    return false
+  }
+}
+
+// 计算被删除的视频数量
+function getDeletedVideoCount() {
+  try {
+    if (!viewRecordDetail.value || !viewRecordDetail.value.video_paths) {
+      return 0
+    }
+    
+    return viewRecordDetail.value.video_paths.filter(videoPath => {
+      try {
+        // 从视频路径中提取视频uid
+        const videoId = getVideoIdFromPath(videoPath)
+        // 检查视频列表中是否存在该uid的视频
+        const videoExists = videoId ? videoList.value.some(v => v.video_id === videoId) : false
+        return !videoExists
+      } catch (error) {
+        console.error('检查视频是否存在时出错:', error)
+        return false
+      }
+    }).length
+  } catch (error) {
+    console.error('计算被删除视频数量时出错:', error)
+    return 0
+  }
 }
 </script>
 
@@ -1169,6 +1416,11 @@ function truncateAnswer(answer, maxLength = 100) {
   border-color: #1890ff;
 }
 
+.video-item.related-video {
+  border: 2px solid #52c41a;
+  background: #f6ffed;
+}
+
 .video-icon-wrapper {
   width: 40px;
   height: 40px;
@@ -1488,7 +1740,10 @@ function truncateAnswer(answer, maxLength = 100) {
 .record-card:hover {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
   transform: translateY(-2px);
+  cursor: pointer;
 }
+
+
 
 .record-header {
   display: flex;
@@ -1634,6 +1889,15 @@ function truncateAnswer(answer, maxLength = 100) {
   font-size: 11px;
 }
 
+.deleted-tag {
+  padding: 4px 10px;
+  background: #fff2f0;
+  color: #ff4d4f;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
 .pagination {
   display: flex;
   justify-content: center;
@@ -1647,6 +1911,123 @@ function truncateAnswer(answer, maxLength = 100) {
 .page-info {
   color: #666;
   font-size: 13px;
+}
+
+/* 记录详情面板样式 */
+.record-detail-panel {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+}
+
+.detail-header {
+  padding: 20px;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #fafafa;
+}
+
+.back-button {
+  flex-shrink: 0;
+}
+
+.detail-header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.detail-content {
+  padding: 20px;
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.detail-time {
+  font-size: 14px;
+  color: #999;
+}
+
+.detail-status {
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.detail-question,
+.detail-answer,
+.detail-videos {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-question h3,
+.detail-answer h3,
+.detail-videos h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #333;
+  font-weight: 600;
+}
+
+.question-content,
+.answer-content {
+  padding: 16px;
+  background: #f5f7fa;
+  border-radius: 8px;
+  line-height: 1.6;
+  color: #333;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.detail-videos .video-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.deleted-videos-info {
+  margin-top: 8px;
+}
+
+.deleted-count {
+  color: #ff4d4f;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.detail-actions {
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  gap: 12px;
 }
 
 /* 响应式设计 */
@@ -1674,6 +2055,10 @@ function truncateAnswer(answer, maxLength = 100) {
     max-height: none;
     min-height: 400px;
   }
+  
+  .record-detail-panel {
+    min-height: 400px;
+  }
 }
 
 @media (max-width: 768px) {
@@ -1692,6 +2077,14 @@ function truncateAnswer(answer, maxLength = 100) {
   
   .records-panel {
     min-height: 300px;
+  }
+  
+  .record-detail-panel {
+    min-height: 300px;
+  }
+  
+  .detail-content {
+    padding: 16px;
   }
 }
 </style>

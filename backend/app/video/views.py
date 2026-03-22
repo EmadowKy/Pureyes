@@ -62,7 +62,8 @@ def upload_video():
     try:
         video_id = str(uuid.uuid4()).replace("-", "")[:32]
         # uuid.uuid4()生成一个随机的UUID对象，str()将其转换为字符串，replace("-", "")去掉其中的连字符，[:32]取前32个字符作为video_id。
-        video_filename = f"{video_id}_{video_name}" 
+        # 只使用video_id作为文件名，不包含视频名称，这样路径不会随名称变化
+        video_filename = f"{video_id}.mp4" 
         video_path = os.path.join(VIDEO_PATH, video_filename)
 
         # 保存视频到服务器
@@ -154,17 +155,13 @@ def rename_video():
         if not video:
             return fail(code = 404, msg = "视频不存在")
         
-        # 重命名视频文件
+        # 检查视频文件是否存在
         if not os.path.exists(video.video_path):
             return fail(code = 404, msg = "视频文件不存在")
 
-        new_filename = f"{video_id}_{new_name}"
-        new_path = os.path.join(VIDEO_PATH, new_filename)
-        os.rename(video.video_path, new_path)
-
-        # 更新数据库记录
+        # 只更新数据库中的视频名称，不需要修改文件系统中的文件名
+        # 因为文件名只包含video_id，不包含视频名称
         video.video_name = new_name
-        video.video_path = new_path
         db.session.commit() 
         return success(data = video.to_dict(), msg = "视频重命名成功")
     except Exception as e:

@@ -33,9 +33,8 @@ api.interceptors.response.use(
     }
     
     const res = response.data
-    if (res.code !== 200) {
-      return Promise.reject(new Error(res.msg || '请求失败'))
-    }
+    console.log('API 响应:', res)
+    // 直接返回响应数据，不做code检查
     return res
   },
   error => {
