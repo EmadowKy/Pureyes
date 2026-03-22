@@ -51,7 +51,7 @@
             </div>
             <div class="video-info">
               <div class="video-title" :title="video.video_name">{{ video.video_name }}</div>
-              <div class="video-path">{{ video.upload_time }}</div>
+              <div class="video-path">{{ video.duration }}</div>
             </div>
             <div class="video-actions">
               <el-checkbox 
@@ -59,6 +59,13 @@
                 class="video-checkbox"
                 @click.stop
               ></el-checkbox>
+              <el-button 
+                size="small" 
+                @click.stop="handleRenameVideo(video)"
+                title="重命名视频"
+              >
+                <el-icon><Edit /></el-icon>
+              </el-button>
               <el-button 
                 size="small" 
                 type="danger" 
@@ -116,182 +123,203 @@
 
         <!-- 快捷操作区 -->
         <div class="quick-actions">
-          <el-button type="primary" @click="showAskDialog = true" class="btn-ask-primary">
-            <el-icon><Plus /></el-icon> 新建问答
-          </el-button>
           <el-button @click="askWithCurrentVideo" :disabled="!currentVideo">
             <el-icon><ChatLineRound /></el-icon> 快速提问当前视频
           </el-button>
         </div>
       </section>
 
-      <!-- 右侧：QA 记录面板 -->
+      <!-- 右侧：问答区域 -->
       <section class="qa-section">
-        <!-- 顶部统计栏 -->
-        <div class="stats-bar">
-          <div class="stat-item">
-            <span class="stat-label">总记录数</span>
-            <span class="stat-value">{{ stats.total }}</span>
-          </div>
-          <div class="stat-item success">
-            <span class="stat-label">成功</span>
-            <span class="stat-value">{{ stats.success }}</span>
-          </div>
-          <div class="stat-item failure">
-            <span class="stat-label">失败</span>
-            <span class="stat-value">{{ stats.failure }}</span>
-          </div>
-          <div v-if="stats.processing > 0" class="stat-item processing">
-            <span class="stat-label">进行中</span>
-            <span class="stat-value">{{ stats.processing }}</span>
-          </div>
-          <div class="stat-actions">
-            <el-button @click="handleExport" size="small" title="导出记录">
-              <el-icon><Download /></el-icon>
-            </el-button>
-          </div>
-        </div>
-
-        <!-- 搜索和筛选 -->
-        <div class="search-bar">
-          <input 
-            v-model="searchQuery" 
-            placeholder="搜索问题或答案..." 
-            class="search-input"
-            @input="handleSearch"
-          />
-          <select v-model="filterStatus" class="filter-select" @change="handleFilter">
-            <option value="all">全部状态</option>
-            <option value="processing">进行中</option>
-            <option value="success">成功</option>
-            <option value="failure">失败</option>
-          </select>
-        </div>
-
-        <!-- 问答记录列表 -->
-        <div class="records-list" ref="recordsListRef">
-          <div v-if="loading" class="loading-state">
-            <div class="spinner"></div>
-            <p>加载中...</p>
-          </div>
-
-          <div v-else-if="records.length === 0" class="empty-state">
-            <div class="empty-icon">💬</div>
-            <p>暂无问答记录</p>
-            <el-button type="primary" @click="showAskDialog = true">
-              开始第一个问答
-            </el-button>
-          </div>
-
-          <div v-else class="records-grid">
-            <div 
-              v-for="record in records" 
-              :key="record.record_id" 
-              class="record-card"
-              :class="{ 
-                'record-processing': record.status === 'processing',
-                'record-failure': record.status === 'failed' || record.success === false,
-                'record-success': record.status === 'completed' && record.success !== false
-              }"
-            >
-              <div class="record-header">
-                <div class="record-meta">
-                  <span class="record-time">{{ formatTime(record.timestamp) }}</span>
-                  <span 
-                    v-if="record.status === 'processing'"
-                    class="record-status status-processing"
-                  >
-                    <span class="pulse-dot"></span>
-                    进行中
-                  </span>
-                  <span 
-                    v-else-if="record.status === 'completed' && record.success !== false"
-                    class="record-status status-success"
-                  >
-                    成功
-                  </span>
-                  <span 
-                    v-else-if="record.status === 'failed' || record.success === false"
-                    class="record-status status-failure"
-                  >
-                    失败
-                  </span>
-                </div>
-                <div class="record-actions">
-                  <button 
-                    v-if="record.status !== 'processing'"
-                    @click="viewRecord(record)" 
-                    class="btn-icon" 
-                    title="查看详情"
-                  >
-                    👁
-                  </button>
-                  <button @click="deleteRecord(record.record_id)" class="btn-icon" title="删除">
-                    🗑
-                  </button>
-                </div>
-              </div>
-              
-              <div class="record-content">
-                <div class="record-question">
-                  <span class="label">问：</span>
-                  <span class="text">{{ record.question }}</span>
-                </div>
-                <div class="record-answer">
-                  <span class="label">答：</span>
-                  <span class="text answer-text">
-                    <span v-if="record.status === 'processing'" class="processing-text">
-                      <span class="spinner-small"></span>
-                      AI 正在分析中...
-                    </span>
-                    <span v-else>{{ truncateAnswer(record.model_result?.answer || record.model_result?.predicted_answer || '无回答') }}</span>
-                  </span>
-                </div>
-              </div>
-
-              <div class="record-footer">
-                <div class="video-tags">
-                  <span 
-                    v-for="(video, index) in record.video_paths" 
-                    :key="index" 
-                    class="video-tag"
-                  >
-                    视频 {{ index + 1 }}
-                  </span>
-                </div>
+        <!-- 提问面板 -->
+        <div class="question-panel">
+          <div class="question-card">
+            <div class="question-header">
+              <h2><el-icon><ChatLineRound /></el-icon> 提问</h2>
+              <p class="question-desc">输入问题并选择视频进行分析</p>
+            </div>
+            <div class="question-input-area">
+              <el-input
+                v-model="questionInput"
+                placeholder="请输入您的问题..."
+                class="question-input"
+                type="textarea"
+                :rows="3"
+              />
+              <div class="question-actions">
+                <span class="selected-count">已选择 {{ selectedVideos.length }} 个视频</span>
+                <el-button 
+                  type="primary" 
+                  @click="submitQuestion"
+                  :disabled="!questionInput.trim() || selectedVideos.length === 0"
+                >
+                  提问
+                </el-button>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- 分页 -->
-        <div v-if="totalPages > 1" class="pagination">
-          <el-button 
-            :disabled="currentPage === 1" 
-            @click="changePage(currentPage - 1)"
-            size="small"
-          >
-            上一页
-          </el-button>
-          <span class="page-info">第 {{ currentPage }} / {{ totalPages }} 页</span>
-          <el-button 
-            :disabled="currentPage === totalPages" 
-            @click="changePage(currentPage + 1)"
-            size="small"
-          >
-            下一页
-          </el-button>
+        <!-- 问答记录面板 -->
+        <div class="records-panel">
+          <!-- 顶部统计栏 -->
+          <div class="stats-bar">
+            <div class="stat-item">
+              <span class="stat-label">总记录数</span>
+              <span class="stat-value">{{ stats.total }}</span>
+            </div>
+            <div class="stat-item success">
+              <span class="stat-label">成功</span>
+              <span class="stat-value">{{ stats.success }}</span>
+            </div>
+            <div class="stat-item failure">
+              <span class="stat-label">失败</span>
+              <span class="stat-value">{{ stats.failure }}</span>
+            </div>
+            <div v-if="stats.processing > 0" class="stat-item processing">
+              <span class="stat-label">进行中</span>
+              <span class="stat-value">{{ stats.processing }}</span>
+            </div>
+            <div class="stat-actions">
+              <el-button @click="handleExport" size="small" title="导出记录">
+                <el-icon><Download /></el-icon>
+              </el-button>
+            </div>
+          </div>
+
+          <!-- 搜索和筛选 -->
+          <div class="search-bar">
+            <input 
+              v-model="searchQuery" 
+              placeholder="搜索问题或答案..." 
+              class="search-input"
+              @input="handleSearch"
+            />
+            <select v-model="filterStatus" class="filter-select" @change="handleFilter">
+              <option value="all">全部状态</option>
+              <option value="processing">进行中</option>
+              <option value="success">成功</option>
+              <option value="failure">失败</option>
+            </select>
+          </div>
+
+          <!-- 问答记录列表 -->
+          <div class="records-list" ref="recordsListRef">
+            <div v-if="loading" class="loading-state">
+              <div class="spinner"></div>
+              <p>加载中...</p>
+            </div>
+
+            <div v-else-if="records.length === 0" class="empty-state">
+              <div class="empty-icon">💬</div>
+              <p>暂无问答记录</p>
+              <p>请在上方提问面板输入问题并选择视频开始问答</p>
+            </div>
+
+            <div v-else class="records-grid">
+              <div 
+                v-for="record in records" 
+                :key="record.record_id" 
+                class="record-card"
+                :class="{ 
+                  'record-processing': record.status === 'processing',
+                  'record-failure': record.status === 'failed' || record.success === false,
+                  'record-success': record.status === 'completed' && record.success !== false
+                }"
+              >
+                <div class="record-header">
+                  <div class="record-meta">
+                    <span class="record-time">{{ formatTime(record.timestamp) }}</span>
+                    <span 
+                      v-if="record.status === 'processing'"
+                      class="record-status status-processing"
+                    >
+                      <span class="pulse-dot"></span>
+                      进行中
+                    </span>
+                    <span 
+                      v-else-if="record.status === 'completed' && record.success !== false"
+                      class="record-status status-success"
+                    >
+                      成功
+                    </span>
+                    <span 
+                      v-else-if="record.status === 'failed' || record.success === false"
+                      class="record-status status-failure"
+                    >
+                      失败
+                    </span>
+                  </div>
+                  <div class="record-actions">
+                    <button 
+                      v-if="record.status !== 'processing'"
+                      @click="viewRecord(record)" 
+                      class="btn-icon" 
+                      title="查看详情"
+                    >
+                      👁
+                    </button>
+                    <button @click="deleteRecord(record.record_id)" class="btn-icon" title="删除">
+                      🗑
+                    </button>
+                  </div>
+                </div>
+                
+                <div class="record-content">
+                  <div class="record-question">
+                    <span class="label">问：</span>
+                    <span class="text">{{ record.question }}</span>
+                  </div>
+                  <div class="record-answer">
+                    <span class="label">答：</span>
+                    <span class="text answer-text">
+                      <span v-if="record.status === 'processing'" class="processing-text">
+                        <span class="spinner-small"></span>
+                        AI 正在分析中...
+                      </span>
+                      <span v-else>{{ truncateAnswer(record.model_result?.answer || record.model_result?.predicted_answer || '无回答') }}</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div class="record-footer">
+                  <div class="video-tags">
+                    <span 
+                      v-for="(video, index) in record.video_paths" 
+                      :key="index" 
+                      class="video-tag"
+                    >
+                      视频 {{ index + 1 }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 分页 -->
+          <div v-if="totalPages > 1" class="pagination">
+            <el-button 
+              :disabled="currentPage === 1" 
+              @click="changePage(currentPage - 1)"
+              size="small"
+            >
+              上一页
+            </el-button>
+            <span class="page-info">第 {{ currentPage }} / {{ totalPages }} 页</span>
+            <el-button 
+              :disabled="currentPage === totalPages" 
+              @click="changePage(currentPage + 1)"
+              size="small"
+            >
+              下一页
+            </el-button>
+          </div>
         </div>
       </section>
     </div>
 
-    <!-- 提问对话框 -->
-    <AskDialog 
-      v-if="showAskDialog" 
-      :preselected-videos="preselectedVideos"
-      @close="showAskDialog = false; preselectedVideos = []"
-      @submit="handleAskSubmit"
-    />
+
 
     <!-- 详情对话框 -->
     <RecordDetailDialog
@@ -339,6 +367,30 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- 视频重命名对话框 -->
+    <el-dialog
+      v-model="showRenameDialog"
+      title="重命名视频"
+      width="400px"
+    >
+      <div class="rename-form">
+        <el-form label-width="80px">
+          <el-form-item label="当前名称">
+            <div class="current-name">{{ currentRenameVideo?.video_name }}</div>
+          </el-form-item>
+          <el-form-item label="新名称">
+            <el-input v-model="newVideoName" placeholder="请输入新的视频名称" />
+          </el-form-item>
+        </el-form>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="showRenameDialog = false">取消</el-button>
+          <el-button type="primary" @click="handleRenameSubmit">确定</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -349,9 +401,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { qaApi } from '../api/qa'
 import { videoApi } from '../api/video'
 import { getAuthInfo } from '../api/auth'
-import AskDialog from '../components/qa/AskDialog.vue'
 import RecordDetailDialog from '../components/qa/RecordDetailDialog.vue'
-import { VideoPlay, Monitor, FullScreen, Close, Plus, ChatLineRound, Download, Upload, Delete } from '@element-plus/icons-vue'
+import { VideoPlay, Monitor, FullScreen, Close, ChatLineRound, Download, Upload, Delete, Edit } from '@element-plus/icons-vue'
 
 const router = useRouter()
 
@@ -369,7 +420,28 @@ onMounted(() => {
   loadStats()
   loadRecords()
   startPolling()
+  
+  // 重置缩放级别
+  resetZoom()
+  
+  // 监听缩放变化并重置
+  window.addEventListener('resize', resetZoom)
 })
+
+onUnmounted(() => {
+  stopPolling()
+  window.removeEventListener('resize', resetZoom)
+})
+
+// 重置缩放级别
+function resetZoom() {
+  // 尝试重置缩放级别
+  if (document.body && document.body.style) {
+    document.body.style.transform = 'scale(1)'
+    document.body.style.transformOrigin = '0 0'
+  }
+}
+
 
 // --- 跳转到用户信息页 ---
 function goToProfile() {
@@ -400,6 +472,9 @@ const playerWrapperRef = ref(null)
 const showUploadDialog = ref(false)
 const uploadVideoName = ref('')
 const uploadVideoFile = ref(null)
+const showRenameDialog = ref(false)
+const currentRenameVideo = ref(null)
+const newVideoName = ref('')
 
 async function loadVideos() {
   try {
@@ -481,6 +556,33 @@ async function handleDeleteVideo(video) {
   }
 }
 
+// 视频重命名处理
+function handleRenameVideo(video) {
+  currentRenameVideo.value = video
+  newVideoName.value = video.video_name
+  showRenameDialog.value = true
+}
+
+async function handleRenameSubmit() {
+  if (!newVideoName.value) {
+    ElMessage.warning('请输入新的视频名称')
+    return
+  }
+
+  try {
+    await videoApi.renameVideo(currentRenameVideo.value.video_id, newVideoName.value)
+    ElMessage.success('视频重命名成功')
+    showRenameDialog.value = false
+    await loadVideos()
+    if (currentVideo.value && currentVideo.value.video_id === currentRenameVideo.value.video_id) {
+      currentVideo.value = videoList.value.find(v => v.video_id === currentRenameVideo.value.video_id) || null
+    }
+  } catch (error) {
+    console.error('视频重命名失败:', error)
+    ElMessage.error('视频重命名失败')
+  }
+}
+
 function playVideo(video) {
   currentVideo.value = video
 }
@@ -549,12 +651,11 @@ async function checkProcessingTasks() {
 
 // --- QA 记录管理 ---
 const loading = ref(false)
-const showAskDialog = ref(false)
 const showDetailDialog = ref(false)
 const selectedRecord = ref(null)
 const searchQuery = ref('')
 const filterStatus = ref('all')
-const preselectedVideos = ref([])
+const questionInput = ref('')
 
 const stats = reactive({
   total: 0,
@@ -628,12 +729,20 @@ async function deleteRecord(recordId) {
   }
 }
 
-async function handleAskSubmit(data) {
+async function submitQuestion() {
+  if (!questionInput.value.trim() || selectedVideos.value.length === 0) {
+    ElMessage.warning('请输入问题并选择视频')
+    return
+  }
+
   try {
-    const result = await qaApi.askQuestion(data)
+    const videoPaths = selectedVideos.value.map(v => v.video_path)
+    const result = await qaApi.askQuestion({
+      question: questionInput.value,
+      video_paths: videoPaths
+    })
     
-    showAskDialog.value = false
-    preselectedVideos.value = []
+    questionInput.value = ''
     
     await loadStats()
     await loadRecords()
@@ -655,8 +764,18 @@ function askWithCurrentVideo() {
     return
   }
   
-  preselectedVideos.value = [currentVideo.value.path]
-  showAskDialog.value = true
+  // 自动选择当前视频
+  videoList.value.forEach(v => {
+    v.selected = v.video_id === currentVideo.value.video_id
+  })
+  
+  // 聚焦到问题输入框
+  setTimeout(() => {
+    const inputEl = document.querySelector('.question-input textarea')
+    if (inputEl) {
+      inputEl.focus()
+    }
+  }, 100)
 }
 
 async function handleExport() {
@@ -708,10 +827,21 @@ function truncateAnswer(answer, maxLength = 100) {
 
 <style scoped>
 .integrated-qa-container {
+  height: 100vh;
   min-height: 100vh;
   background: #f5f7fa;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+/* 布局优化，确保在不同缩放级别下保持稳定 */
+* {
+  box-sizing: border-box;
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /* 用户名设置栏 */
@@ -858,7 +988,7 @@ function truncateAnswer(answer, maxLength = 100) {
 /* 主布局 */
 .main-layout {
   display: grid;
-  grid-template-columns: 320px 1fr 600px;
+  grid-template-columns: 3fr 7fr 4fr;
   gap: 20px;
   padding: 20px;
   flex: 1;
@@ -873,6 +1003,85 @@ function truncateAnswer(answer, maxLength = 100) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* 问答区域 */
+.qa-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow: hidden;
+}
+
+/* 提问面板 */
+.question-panel {
+  flex-shrink: 0;
+}
+
+.question-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.question-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-bottom: 1px solid #f0f0f0;
+  padding-bottom: 16px;
+}
+
+.question-header h2 {
+  margin: 0;
+  font-size: 18px;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.question-desc {
+  margin: 0;
+  font-size: 13px;
+  color: #999;
+}
+
+.question-input-area {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.question-input {
+  width: 100%;
+}
+
+.question-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.selected-count {
+  font-size: 13px;
+  color: #666;
+}
+
+/* 记录面板 */
+.records-panel {
+  flex: 1;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: calc(100vh - 480px);
 }
 
 .panel-header {
@@ -921,6 +1130,15 @@ function truncateAnswer(answer, maxLength = 100) {
   background: #f5f7fa;
   padding: 8px 12px;
   border-radius: 4px;
+}
+
+.current-name {
+  font-size: 14px;
+  color: #999;
+  background: #f5f7fa;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border: 1px solid #e8e8e8;
 }
 
 .video-list {
@@ -1030,6 +1248,7 @@ function truncateAnswer(answer, maxLength = 100) {
   flex-direction: column;
   gap: 16px;
   overflow: hidden;
+  flex: 1;
 }
 
 .player-card {
@@ -1068,6 +1287,7 @@ function truncateAnswer(answer, maxLength = 100) {
   justify-content: center;
   position: relative;
   min-height: 0;
+  min-height: 300px;
 }
 
 .video-player {
@@ -1105,16 +1325,7 @@ function truncateAnswer(answer, maxLength = 100) {
   opacity: 0.9;
 }
 
-/* QA 记录区域 */
-.qa-section {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  max-height: calc(100vh - 180px);
-}
+
 
 .stats-bar {
   display: flex;
@@ -1186,6 +1397,28 @@ function truncateAnswer(answer, maxLength = 100) {
   font-size: 14px;
   background: white;
   cursor: pointer;
+}
+
+.question-input-area {
+  padding: 16px 20px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+
+.question-input {
+  margin-bottom: 12px;
+  width: 100%;
+}
+
+.question-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.selected-count {
+  font-size: 13px;
+  color: #666;
 }
 
 .records-list {
@@ -1419,14 +1652,14 @@ function truncateAnswer(answer, maxLength = 100) {
 /* 响应式设计 */
 @media (max-width: 1400px) {
   .main-layout {
-    grid-template-columns: 280px 1fr 500px;
+    grid-template-columns: 2.5fr 6fr 4fr;
   }
 }
 
 @media (max-width: 1200px) {
   .main-layout {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto 1fr;
+    grid-template-rows: auto auto auto auto;
   }
   
   .video-panel {
@@ -1435,6 +1668,30 @@ function truncateAnswer(answer, maxLength = 100) {
   
   .player-section {
     min-height: 400px;
+  }
+  
+  .records-panel {
+    max-height: none;
+    min-height: 400px;
+  }
+}
+
+@media (max-width: 768px) {
+  .main-layout {
+    padding: 10px;
+    gap: 10px;
+  }
+  
+  .question-card {
+    padding: 16px;
+  }
+  
+  .player-section {
+    min-height: 300px;
+  }
+  
+  .records-panel {
+    min-height: 300px;
   }
 }
 </style>
