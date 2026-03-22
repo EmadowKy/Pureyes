@@ -4,11 +4,10 @@
     <div class="user-bar">
       <div class="user-info">
         <span class="user-label">当前用户：</span>
-        <span class="username-display">用户</span>
+        <span class="username-display">{{ username }}</span>
       </div>
       <div class="actions">
         <button @click="goToProfile" class="btn-profile">用户信息</button>
-        <button @click="handleLogout" class="btn-logout">退出登录</button>
       </div>
     </div>
 
@@ -349,13 +348,23 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { qaApi } from '../api/qa'
 import { videoApi } from '../api/video'
+import { getAuthInfo } from '../api/auth'
 import AskDialog from '../components/qa/AskDialog.vue'
 import RecordDetailDialog from '../components/qa/RecordDetailDialog.vue'
 import { VideoPlay, Monitor, FullScreen, Close, Plus, ChatLineRound, Download, Upload, Delete } from '@element-plus/icons-vue'
 
 const router = useRouter()
 
+// 用户名状态
+const username = ref('用户')
+
 onMounted(() => {
+  // 获取当前用户信息
+  const authInfo = getAuthInfo()
+  if (authInfo.user && authInfo.user.username) {
+    username.value = authInfo.user.username
+  }
+  
   loadVideos()
   loadStats()
   loadRecords()
@@ -365,15 +374,6 @@ onMounted(() => {
 // --- 跳转到用户信息页 ---
 function goToProfile() {
   router.push('/profile')
-}
-
-// --- 退出登录 ---
-function handleLogout() {
-  if (confirm('确定要退出登录吗？')) {
-    localStorage.removeItem('token')
-    localStorage.removeItem('qa_username')
-    router.push('/login')
-  }
 }
 
 // --- 通知系统 ---

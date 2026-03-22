@@ -17,6 +17,13 @@ def create_app():
     jwt.init_app(app)
     cors.init_app(app, resources={r"/api/*": {"origins": "*"}, "/*": {"origins": "*"}})
     
+    # JWT token黑名单检查
+    from app.auth.routes import token_blacklist
+    @jwt.token_in_blocklist_loader
+    def check_if_token_in_blacklist(jwt_header, jwt_payload):
+        jti = jwt_payload["jti"]
+        return jti in token_blacklist
+    
     # 注册认证蓝图
     from app.auth import auth_bp
     app.register_blueprint(auth_bp, url_prefix="/api/auth")

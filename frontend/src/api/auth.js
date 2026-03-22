@@ -93,12 +93,22 @@ export function refreshToken(refreshToken) {
 }
 
 /**
- * 清除本地认证信息
+ * 用户登出
+ * @returns {Promise}
  */
 export function logout() {
+  return authApi.post('/auth/logout')
+}
+
+/**
+ * 清除本地认证信息
+ */
+export function clearAuthInfo() {
   localStorage.removeItem('access_token')
   localStorage.removeItem('refresh_token')
   localStorage.removeItem('user_info')
+  localStorage.removeItem('qa_username')
+  localStorage.removeItem('token')
 }
 
 /**

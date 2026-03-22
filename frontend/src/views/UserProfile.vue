@@ -58,6 +58,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getCurrentUser } from '../api/user'
+import { logout, clearAuthInfo } from '../api/auth'
 
 const router = useRouter()
 
@@ -143,14 +144,19 @@ function goToQA() {
   router.push('/qa')
 }
 
-function handleLogout() {
+async function handleLogout() {
   if (window.confirm('确定要退出登录吗？')) {
-    localStorage.removeItem('token')
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
-    localStorage.removeItem('user_info')
-    localStorage.removeItem('qa_username')
-    router.push('/login')
+    try {
+      // 调用后端登出接口
+      await logout()
+    } catch (error) {
+      console.error('登出失败:', error)
+    } finally {
+      // 无论后端登出是否成功，都清除本地认证信息
+      clearAuthInfo()
+      router.push('/login')
+      ElMessage.success('已成功退出登录')
+    }
   }
 }
 
