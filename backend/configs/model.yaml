@@ -1,0 +1,82 @@
+models:
+  main_model_path: "Qwen/Qwen2.5-VL-3B-Instruct"
+
+paths:
+  output_dir: "../../output/output"
+  video_frames_dir: "../../output/video_frames"
+  key_frames_dir: "../../output/key_frames"
+  Benchmark_name: "Benchmark"  # 基准测试名称
+
+parameters:
+  size: 360
+  num_frames_iter: 4
+  num_frames_noiter: 4
+  num_gpus: 1
+  # 任务数量, -1 表示所有
+  num_tasks: -1
+  sub_task: "all"
+  save_key_frames: false
+  save_video_frames: false
+  number_type: "123"
+
+  use_visual_answer: true # 是否提供关键帧图片 (对应 answer_visual_only 模版)
+  use_text_answer: true # 是否提供文本描述 (对应 answer_text_only 模版)
+  # 若两者均为 true, 则使用 answer_combined 模版
+  print_output: false
+  skip_iteration: false # 直接回答
+  question_analysis: true # 是否进行问题分析，生成 question_analysis 模版所需的提示词
+
+  # Agent 参数
+  agent:
+    global_max_iterations: 4 # 通过Tool Agent获取信息的全局最大迭代次数
+    frame_bank_size: 4 # 每个视频最多取这么多帧
+    initial_acceleration: 1.0
+    min_acceleration_threshold: 0.2 # 单视频最低加速度阈值，低于则终止该视频
+    max_score_threshold: 0.8 # 所有视频平均分数超过则整体终止
+
+  type_watermark: "video_tag temporal_tag trans_frame" # 水印类型
+  # 可选模式 (可叠加, 如"video_tag+temporal_tag"):
+  # "video_tag": 视频标签 (左上角)
+  # "temporal_tag": 时间戳 (左上角)
+  # "trans_frame": 转场帧)
+  # "none": 无水印
+  priority_score_k: 1.0 # 优先级计算中加速权重k的值，默认1.0
+  priority_score_t: 1.0 # 优先级计算中当前分数权重t的值，默认1.0
+  # log_prefix: {Benchmark_name}_{date}_{time}_{type_watermark}
+
+prompts:
+  # 工具代理的综合行动提示 - 用于选择要分析的帧
+  tool_combined_action: |
+    You are a Tool Agent helping to analyze videos to answer questions.
+    Based on the question and current video content, decide which frames to analyze next.
+    {TOOL_ANALYSIS}
+    Question: {QUESTION}
+    Options: {OPTIONS}
+    Current video frames and descriptions are provided.
+    Please recommend the next frames to examine.
+  
+  # 描述代理的综合行动提示 - 用于生成视频描述
+  desc_combined_action: |
+    You are a Description Agent analyzing video content.
+    Based on the frames shown, provide detailed descriptions of the video content.
+    {DESC_ANALYSIS}
+    Question: {QUESTION}
+    Options: {OPTIONS}
+    Please describe what you see in the current frames.
+  
+  # 问题分析提示 - 分析问题以制定分析策略
+  question_analysis: |
+    Analyze the following question and suggest a strategy for analyzing videos:
+    Question: {QUESTION}
+    Options: {OPTIONS}
+    What key aspects should we focus on?
+  
+  # 工具分析提示 - 分析使用什么工具或技术
+  tool_analysis: |
+    Based on the question, what tools or techniques would be most helpful for analysis?
+    Focus on the most relevant frame analysis approach.
+  
+  # 描述分析提示 - 分析视频中的关键信息
+  desc_analysis: |
+    What aspects of the videos are most relevant to answering this question?
+    What descriptions would be most useful?
