@@ -1,12 +1,45 @@
 <template>
   <div class="integrated-qa-container">
+    <div class="qa-bg-glow"></div>
+
     <!-- 用户信息栏 -->
     <div class="user-bar">
       <div class="user-info">
         <span class="user-label">当前用户：</span>
         <span class="username-display">{{ username }}</span>
       </div>
+
       <div class="actions">
+        <!-- 主题工具 -->
+        <div class="theme-tools">
+          <button
+            class="theme-btn"
+            @click="toggleThemeMode"
+            :title="themeMode === 'light' ? '切换暗黑模式' : '切换明亮模式'"
+          >
+            {{ themeMode === 'light' ? '🌙' : '☀️' }}
+          </button>
+
+          <button
+            class="dot violet"
+            :class="{ active: themeColor === 'violet' }"
+            @click="setThemeColor('violet')"
+            title="紫蓝主题"
+          ></button>
+          <button
+            class="dot teal"
+            :class="{ active: themeColor === 'teal' }"
+            @click="setThemeColor('teal')"
+            title="青绿主题"
+          ></button>
+          <button
+            class="dot rose"
+            :class="{ active: themeColor === 'rose' }"
+            @click="setThemeColor('rose')"
+            title="玫红主题"
+          ></button>
+        </div>
+
         <button @click="goToProfile" class="btn-profile">用户信息</button>
       </div>
     </div>
@@ -28,22 +61,17 @@
         <div class="panel-header">
           <h2><el-icon><VideoPlay /></el-icon> 视频选择</h2>
           <p class="panel-desc">选择要分析的视频</p>
-          <el-button 
-            type="primary" 
-            size="small" 
-            @click="showUploadDialog = true"
-            class="btn-upload"
-          >
+          <el-button type="primary" size="small" @click="showUploadDialog = true" class="btn-upload">
             <el-icon><Upload /></el-icon> 上传视频
           </el-button>
         </div>
 
         <div class="video-list">
-          <div 
-            v-for="video in videoList" 
-            :key="video.video_id" 
-            class="video-item" 
-            :class="{ 
+          <div
+            v-for="video in videoList"
+            :key="video.video_id"
+            class="video-item"
+            :class="{
               active: currentVideo && currentVideo.video_id === video.video_id,
               'related-video': isRelatedVideo(video.video_path)
             }"
@@ -57,24 +85,11 @@
               <div class="video-path">{{ video.duration }}</div>
             </div>
             <div class="video-actions">
-              <el-checkbox 
-                v-model="video.selected" 
-                class="video-checkbox"
-                @click.stop
-              ></el-checkbox>
-              <el-button 
-                size="small" 
-                @click.stop="handleRenameVideo(video)"
-                title="重命名视频"
-              >
+              <el-checkbox v-model="video.selected" class="video-checkbox" @click.stop></el-checkbox>
+              <el-button size="small" @click.stop="handleRenameVideo(video)" title="重命名视频">
                 <el-icon><Edit /></el-icon>
               </el-button>
-              <el-button 
-                size="small" 
-                type="danger" 
-                @click.stop="handleDeleteVideo(video)"
-                title="删除视频"
-              >
+              <el-button size="small" type="danger" @click.stop="handleDeleteVideo(video)" title="删除视频">
                 <el-icon><Delete /></el-icon>
               </el-button>
             </div>
@@ -110,21 +125,13 @@
           </div>
 
           <div class="player-wrapper" ref="playerWrapperRef">
-            <video 
-              v-if="currentVideo" 
-              ref="videoRef" 
-              :src="getVideoUrl(currentVideo.video_path)" 
-              controls 
-              class="video-player"
-            ></video>
+            <video v-if="currentVideo" ref="videoRef" :src="getVideoUrl(currentVideo.video_path)" controls class="video-player"></video>
             <div v-else class="empty-player">
               <el-icon class="empty-icon"><Monitor /></el-icon>
               <p>请在左侧选择视频播放</p>
             </div>
           </div>
         </div>
-
-
       </section>
 
       <!-- 右侧：问答区域 -->
@@ -137,36 +144,26 @@
             </el-button>
             <h2><el-icon><ChatLineRound /></el-icon> 问答详情</h2>
           </div>
-          
+
           <div class="detail-content">
             <div class="detail-meta">
               <span class="detail-time">{{ formatTime(viewRecordDetail.timestamp) }}</span>
-              <span 
-                v-if="viewRecordDetail.status === 'processing'"
-                class="detail-status status-processing"
-              >
-                <span class="pulse-dot"></span>
-                进行中
+              <span v-if="viewRecordDetail.status === 'processing'" class="detail-status status-processing">
+                <span class="pulse-dot"></span>进行中
               </span>
-              <span 
-                v-else-if="viewRecordDetail.status === 'completed' && viewRecordDetail.success !== false"
-                class="detail-status status-success"
-              >
+              <span v-else-if="viewRecordDetail.status === 'completed' && viewRecordDetail.success !== false" class="detail-status status-success">
                 成功
               </span>
-              <span 
-                v-else-if="viewRecordDetail.status === 'failed' || viewRecordDetail.success === false"
-                class="detail-status status-failure"
-              >
+              <span v-else-if="viewRecordDetail.status === 'failed' || viewRecordDetail.success === false" class="detail-status status-failure">
                 失败
               </span>
             </div>
-            
+
             <div class="detail-question">
               <h3>问题</h3>
               <div class="question-content">{{ viewRecordDetail.question }}</div>
             </div>
-            
+
             <div class="detail-answer">
               <h3>回答</h3>
               <div class="answer-content">
@@ -177,13 +174,13 @@
                 <span v-else>{{ viewRecordDetail.model_result?.answer || viewRecordDetail.model_result?.predicted_answer || '无回答' }}</span>
               </div>
             </div>
-            
+
             <div class="detail-videos">
               <h3>相关视频</h3>
               <div class="video-list">
-                <span 
-                  v-for="(videoPath, index) in viewRecordDetail.video_paths.filter(vp => getVideoNameByPath(vp))" 
-                  :key="index" 
+                <span
+                  v-for="(videoPath, index) in viewRecordDetail.video_paths.filter(vp => getVideoNameByPath(vp))"
+                  :key="index"
                   class="video-tag"
                 >
                   {{ getVideoNameByPath(videoPath) }}
@@ -193,7 +190,7 @@
                 <span class="deleted-count">还有 {{ getDeletedVideoCount() }} 个被删除的视频</span>
               </div>
             </div>
-            
+
             <div class="detail-actions">
               <el-button @click="deleteRecord(viewRecordDetail.record_id)" type="danger" size="small">
                 <el-icon><Delete /></el-icon> 删除记录
@@ -201,10 +198,9 @@
             </div>
           </div>
         </div>
-        
+
         <!-- 提问和记录列表视图 -->
         <div v-else>
-          <!-- 提问面板 -->
           <div class="question-panel">
             <div class="question-card">
               <div class="question-header">
@@ -221,11 +217,7 @@
                 />
                 <div class="question-actions">
                   <span class="selected-count">已选择 {{ selectedVideos.length }} 个视频</span>
-                  <el-button 
-                    type="primary" 
-                    @click="submitQuestion"
-                    :disabled="!questionInput.trim() || selectedVideos.length === 0"
-                  >
+                  <el-button type="primary" @click="submitQuestion" :disabled="!questionInput.trim() || selectedVideos.length === 0">
                     提问
                   </el-button>
                 </div>
@@ -233,9 +225,7 @@
             </div>
           </div>
 
-          <!-- 问答记录面板 -->
           <div class="records-panel">
-            <!-- 顶部统计栏 -->
             <div class="stats-bar">
               <div class="stat-item">
                 <span class="stat-label">总记录数</span>
@@ -260,14 +250,8 @@
               </div>
             </div>
 
-            <!-- 搜索和筛选 -->
             <div class="search-bar">
-              <input 
-                v-model="searchQuery" 
-                placeholder="搜索问题或答案..." 
-                class="search-input"
-                @input="handleSearch"
-              />
+              <input v-model="searchQuery" placeholder="搜索问题或答案..." class="search-input" @input="handleSearch" />
               <select v-model="filterStatus" class="filter-select" @change="handleFilter">
                 <option value="all">全部状态</option>
                 <option value="processing">进行中</option>
@@ -276,7 +260,6 @@
               </select>
             </div>
 
-            <!-- 问答记录列表 -->
             <div class="records-list" ref="recordsListRef">
               <div v-if="loading" class="loading-state">
                 <div class="spinner"></div>
@@ -290,47 +273,35 @@
               </div>
 
               <div v-else class="records-grid">
-                <div 
-                v-for="record in records" 
-                :key="record.record_id" 
-                class="record-card"
-                :class="{ 
-                  'record-processing': record.status === 'processing',
-                  'record-failure': record.status === 'failed' || record.success === false,
-                  'record-success': record.status === 'completed' && record.success !== false
-                }"
-                @click="viewRecord(record)"
-              >
+                <div
+                  v-for="record in records"
+                  :key="record.record_id"
+                  class="record-card"
+                  :class="{
+                    'record-processing': record.status === 'processing',
+                    'record-failure': record.status === 'failed' || record.success === false,
+                    'record-success': record.status === 'completed' && record.success !== false
+                  }"
+                  @click="viewRecord(record)"
+                >
                   <div class="record-header">
                     <div class="record-meta">
                       <span class="record-time">{{ formatTime(record.timestamp) }}</span>
-                      <span 
-                        v-if="record.status === 'processing'"
-                        class="record-status status-processing"
-                      >
-                        <span class="pulse-dot"></span>
-                        进行中
+                      <span v-if="record.status === 'processing'" class="record-status status-processing">
+                        <span class="pulse-dot"></span>进行中
                       </span>
-                      <span 
-                        v-else-if="record.status === 'completed' && record.success !== false"
-                        class="record-status status-success"
-                      >
+                      <span v-else-if="record.status === 'completed' && record.success !== false" class="record-status status-success">
                         成功
                       </span>
-                      <span 
-                        v-else-if="record.status === 'failed' || record.success === false"
-                        class="record-status status-failure"
-                      >
+                      <span v-else-if="record.status === 'failed' || record.success === false" class="record-status status-failure">
                         失败
                       </span>
                     </div>
                     <div class="record-actions">
-                      <button @click.stop="deleteRecord(record.record_id)" class="btn-icon" title="删除">
-                        🗑
-                      </button>
+                      <button @click.stop="deleteRecord(record.record_id)" class="btn-icon" title="删除">🗑</button>
                     </div>
                   </div>
-                  
+
                   <div class="record-content">
                     <div class="record-question">
                       <span class="label">问：</span>
@@ -350,9 +321,9 @@
 
                   <div class="record-footer">
                     <div class="video-tags">
-                      <span 
-                        v-for="(videoPath, index) in record.video_paths.filter(vp => getVideoNameByPath(vp))" 
-                        :key="index" 
+                      <span
+                        v-for="(videoPath, index) in record.video_paths.filter(vp => getVideoNameByPath(vp))"
+                        :key="index"
                         class="video-tag"
                       >
                         {{ getVideoNameByPath(videoPath) }}
@@ -366,62 +337,31 @@
               </div>
             </div>
 
-            <!-- 分页 -->
             <div v-if="totalPages > 1" class="pagination">
-              <el-button 
-                :disabled="currentPage === 1" 
-                @click="changePage(currentPage - 1)"
-                size="small"
-              >
-                上一页
-              </el-button>
+              <el-button :disabled="currentPage === 1" @click="changePage(currentPage - 1)" size="small">上一页</el-button>
               <span class="page-info">第 {{ currentPage }} / {{ totalPages }} 页</span>
-              <el-button 
-                :disabled="currentPage === totalPages" 
-                @click="changePage(currentPage + 1)"
-                size="small"
-              >
-                下一页
-              </el-button>
+              <el-button :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)" size="small">下一页</el-button>
             </div>
           </div>
         </div>
       </section>
     </div>
 
-
-
-
-
-    <!-- 视频上传对话框 -->
-    <el-dialog
-      v-model="showUploadDialog"
-      title="上传视频"
-      width="500px"
-    >
+    <!-- 上传对话框 -->
+    <el-dialog v-model="showUploadDialog" title="上传视频" width="500px">
       <div class="upload-form">
         <el-form label-width="80px">
           <el-form-item label="视频名称">
             <el-input v-model="uploadVideoName" placeholder="请输入视频名称" />
           </el-form-item>
           <el-form-item label="视频文件">
-            <el-upload
-              class="upload-demo"
-              action=""
-              :auto-upload="false"
-              :on-change="handleFileChange"
-              :show-file-list="false"
-            >
+            <el-upload class="upload-demo" action="" :auto-upload="false" :on-change="handleFileChange" :show-file-list="false">
               <el-button size="small" type="primary">选择文件</el-button>
               <template #tip>
-                <div class="el-upload__tip">
-                  请选择 MP4 格式的视频文件
-                </div>
+                <div class="el-upload__tip">请选择 MP4 格式的视频文件</div>
               </template>
             </el-upload>
-            <div v-if="uploadVideoFile" class="file-info">
-              已选择: {{ uploadVideoFile.name }}
-            </div>
+            <div v-if="uploadVideoFile" class="file-info">已选择: {{ uploadVideoFile.name }}</div>
           </el-form-item>
         </el-form>
       </div>
@@ -433,12 +373,8 @@
       </template>
     </el-dialog>
 
-    <!-- 视频重命名对话框 -->
-    <el-dialog
-      v-model="showRenameDialog"
-      title="重命名视频"
-      width="400px"
-    >
+    <!-- 重命名对话框 -->
+    <el-dialog v-model="showRenameDialog" title="重命名视频" width="400px">
       <div class="rename-form">
         <el-form label-width="80px">
           <el-form-item label="当前名称">
@@ -456,6 +392,16 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- 鼠标点击特效层 -->
+    <div class="click-layer">
+      <span
+        v-for="r in ripples"
+        :key="r.id"
+        class="click-ripple"
+        :style="{ left: r.x + 'px', top: r.y + 'px' }"
+      ></span>
+    </div>
   </div>
 </template>
 
@@ -466,69 +412,84 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { qaApi } from '../api/qa'
 import { videoApi } from '../api/video'
 import { getAuthInfo } from '../api/auth'
-
 import { VideoPlay, Monitor, FullScreen, Close, ChatLineRound, Download, Upload, Delete, Edit, ArrowLeft } from '@element-plus/icons-vue'
 
 const router = useRouter()
-
-// 用户名状态
 const username = ref('用户')
 
+/* 主题控制 */
+const themeMode = ref(localStorage.getItem('theme_mode') || 'light')
+const themeColor = ref(localStorage.getItem('theme_color') || 'violet')
+
+function applyTheme() {
+  document.documentElement.setAttribute('data-theme-mode', themeMode.value)
+  document.documentElement.setAttribute('data-theme-color', themeColor.value)
+  localStorage.setItem('theme_mode', themeMode.value)
+  localStorage.setItem('theme_color', themeColor.value)
+}
+function toggleThemeMode() {
+  themeMode.value = themeMode.value === 'light' ? 'dark' : 'light'
+  applyTheme()
+}
+function setThemeColor(color) {
+  themeColor.value = color
+  applyTheme()
+}
+
+/* 鼠标点击特效 */
+const ripples = ref([])
+let rippleId = 1
+function handleGlobalClick(e) {
+  const id = rippleId++
+  ripples.value.push({ id, x: e.clientX, y: e.clientY })
+  setTimeout(() => {
+    ripples.value = ripples.value.filter(r => r.id !== id)
+  }, 650)
+}
+
 onMounted(() => {
-  // 获取当前用户信息
   const authInfo = getAuthInfo()
-  if (authInfo.user && authInfo.user.username) {
-    username.value = authInfo.user.username
-  }
-  
+  if (authInfo.user && authInfo.user.username) username.value = authInfo.user.username
+
+  applyTheme()
   loadVideos()
   loadStats()
   loadRecords()
   startPolling()
-  
-  // 重置缩放级别
   resetZoom()
-  
-  // 监听缩放变化并重置
+
   window.addEventListener('resize', resetZoom)
+  window.addEventListener('click', handleGlobalClick)
 })
 
 onUnmounted(() => {
   stopPolling()
   window.removeEventListener('resize', resetZoom)
+  window.removeEventListener('click', handleGlobalClick)
 })
 
-// 重置缩放级别
 function resetZoom() {
-  // 尝试重置缩放级别
   if (document.body && document.body.style) {
     document.body.style.transform = 'scale(1)'
     document.body.style.transformOrigin = '0 0'
   }
 }
-
-
-// --- 跳转到用户信息页 ---
 function goToProfile() {
   router.push('/profile')
 }
 
-// --- 通知系统 ---
+/* 通知 */
 const showNotification = ref(false)
 const notificationType = ref('success')
 const notificationMessage = ref('')
-
 function showNotificationBanner(message, type = 'success') {
   notificationMessage.value = message
   notificationType.value = type
   showNotification.value = true
-  
-  setTimeout(() => {
-    showNotification.value = false
-  }, 5000)
+  setTimeout(() => { showNotification.value = false }, 5000)
 }
 
-// --- 视频管理 ---
+/* 视频管理 */
 const videoList = ref([])
 const currentVideo = ref(null)
 const videoRef = ref(null)
@@ -543,72 +504,33 @@ const newVideoName = ref('')
 
 async function loadVideos() {
   try {
-    console.log('=== 开始加载视频列表 ===')
     const response = await videoApi.getVideoList()
-    console.log('加载视频列表响应:', response)
-    
-    // 检查response是否存在
-    if (!response) {
-      console.error('视频列表响应为空')
-      ElMessage.error('视频列表响应为空')
-      return
-    }
-    
-    // 检查response.data是否存在
-    if (!response.data) {
-      console.error('视频列表数据为空')
-      ElMessage.error('视频列表数据为空')
-      return
-    }
-    
-    // 检查response.data.videos是否存在
-    if (!response.data.videos || !Array.isArray(response.data.videos)) {
-      console.error('视频列表格式错误:', response.data)
+    if (!response || !response.data || !Array.isArray(response.data.videos)) {
       ElMessage.error('视频列表格式错误')
       return
     }
-    
-    // 加载视频列表
-    videoList.value = response.data.videos.map(video => ({
-      ...video,
-      selected: false
-    }))
-    
-    if (videoList.value.length > 0) {
-      currentVideo.value = videoList.value[0]
-    }
-    
-    console.log('视频列表加载成功，长度:', videoList.value.length)
-    console.log('视频列表详情:', videoList.value)
-    console.log('=== 视频列表加载完成 ===')
+    videoList.value = response.data.videos.map(video => ({ ...video, selected: false }))
+    if (videoList.value.length > 0) currentVideo.value = videoList.value[0]
   } catch (error) {
     console.error('加载视频列表失败:', error)
     ElMessage.error('加载视频列表失败')
   }
 }
-
 function getVideoUrl(videoPath) {
-  // 从完整路径中提取文件名
   const filename = videoPath.split('/').pop()
   return `/api/video/uploads/${filename}`
 }
-
-// 视频上传处理
-function handleFileChange(file, fileList) {
+function handleFileChange(file) {
   if (file) {
     uploadVideoFile.value = file.raw
-    if (!uploadVideoName.value) {
-      uploadVideoName.value = file.name.replace(/\.[^/.]+$/, "")
-    }
+    if (!uploadVideoName.value) uploadVideoName.value = file.name.replace(/\.[^/.]+$/, "")
   }
 }
-
 async function handleUploadVideo() {
   if (!uploadVideoName.value || !uploadVideoFile.value) {
     ElMessage.warning('请填写视频名称并选择视频文件')
     return
   }
-
   try {
     await videoApi.uploadVideo(uploadVideoName.value, uploadVideoFile.value)
     ElMessage.success('视频上传成功')
@@ -621,20 +543,13 @@ async function handleUploadVideo() {
     ElMessage.error('视频上传失败')
   }
 }
-
-// 视频删除处理
 async function handleDeleteVideo(video) {
   try {
-    await ElMessageBox.confirm(
-      `确定要删除视频 "${video.video_name}" 吗？`,
-      '删除视频',
-      {
-        confirmButtonText: '确定',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
-
+    await ElMessageBox.confirm(`确定要删除视频 "${video.video_name}" 吗？`, '删除视频', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
     await videoApi.deleteVideo(video.video_id)
     ElMessage.success('视频删除成功')
     await loadVideos()
@@ -648,20 +563,16 @@ async function handleDeleteVideo(video) {
     }
   }
 }
-
-// 视频重命名处理
 function handleRenameVideo(video) {
   currentRenameVideo.value = video
   newVideoName.value = video.video_name
   showRenameDialog.value = true
 }
-
 async function handleRenameSubmit() {
   if (!newVideoName.value) {
     ElMessage.warning('请输入新的视频名称')
     return
   }
-
   try {
     await videoApi.renameVideo(currentRenameVideo.value.video_id, newVideoName.value)
     ElMessage.success('视频重命名成功')
@@ -675,63 +586,40 @@ async function handleRenameSubmit() {
     ElMessage.error('视频重命名失败')
   }
 }
-
-function playVideo(video) {
-  currentVideo.value = video
-}
-
-function togglePlayerFullscreen() {
-  isPlayerFullscreen.value = !isPlayerFullscreen.value
-}
-
+function playVideo(video) { currentVideo.value = video }
+function togglePlayerFullscreen() { isPlayerFullscreen.value = !isPlayerFullscreen.value }
 const selectedVideos = computed(() => videoList.value.filter(v => v.selected))
 
-// --- 轮询机制 ---
+/* 轮询 */
 let pollingInterval = null
 const processedTasks = new Set()
-
 function startPolling() {
   pollingInterval = setInterval(async () => {
     await checkProcessingTasks()
-  }, 3000)
+  }, 6000)
 }
-
 function stopPolling() {
   if (pollingInterval) {
     clearInterval(pollingInterval)
     pollingInterval = null
   }
 }
-
-onUnmounted(() => {
-  stopPolling()
-})
-
 async function checkProcessingTasks() {
   try {
     const res = await qaApi.getRecords({ page: 1, limit: 100 })
     if (res.data) {
       const processingRecords = res.data.records.filter(r => r.status === 'processing')
-      
       for (const record of processingRecords) {
-        if (processedTasks.has(record.record_id)) {
-          continue
-        }
-        
+        if (processedTasks.has(record.record_id)) continue
         const statusRes = await qaApi.getRecord(record.record_id)
         const data = statusRes.data
-        
         if (data && (data.status === 'completed' || data.status === 'failed' || data.success !== undefined)) {
           processedTasks.add(record.record_id)
-          
           await loadRecords()
           await loadStats()
-          
           if (data.status === 'completed' || data.success === true) {
             showNotificationBanner(`"${truncateAnswer(data.question, 30)}" 已完成！`, 'success')
-          } else if (data.status === 'failed') {
-            showNotificationBanner(`"${truncateAnswer(data.question, 30)}" 处理失败`, 'error')
-          } else if (data.success === false) {
+          } else {
             showNotificationBanner(`"${truncateAnswer(data.question, 30)}" 处理失败`, 'error')
           }
         }
@@ -742,23 +630,15 @@ async function checkProcessingTasks() {
   }
 }
 
-// --- QA 记录管理 ---
+/* QA 记录 */
 const loading = ref(false)
-const showDetailDialog = ref(false)
-const selectedRecord = ref(null)
-const viewRecordDetail = ref(null) // 当前查看的记录详情
-const relatedVideos = ref([]) // 当前记录的相关视频路径
+const viewRecordDetail = ref(null)
+const relatedVideos = ref([])
 const searchQuery = ref('')
 const filterStatus = ref('all')
 const questionInput = ref('')
 
-const stats = reactive({
-  total: 0,
-  success: 0,
-  failure: 0,
-  processing: 0
-})
-
+const stats = reactive({ total: 0, success: 0, failure: 0, processing: 0 })
 const records = ref([])
 const currentPage = ref(1)
 const pageSize = 10
@@ -767,104 +647,44 @@ const totalPages = ref(1)
 async function loadStats() {
   try {
     const res = await qaApi.getSummary()
-    console.log('获取统计数据成功:', res)
-    // 直接使用res，不再检查res.data
     stats.total = res.total_records || res.data?.total_records || 0
     stats.success = res.success_count || res.data?.success_count || 0
     stats.failure = res.failure_count || res.data?.failure_count || 0
     stats.processing = res.processing_count || res.data?.processing_count || 0
   } catch (error) {
     console.error('加载统计数据失败:', error)
-    // 确保即使失败也重置统计数据
     stats.total = 0
     stats.success = 0
     stats.failure = 0
     stats.processing = 0
   }
 }
-
 async function loadRecords() {
-  console.log('开始加载记录...')
   loading.value = true
   try {
-    // 确保视频列表已经加载
-    console.log('当前视频列表长度:', videoList.value.length)
-    if (videoList.value.length === 0) {
-      console.log('视频列表为空，开始加载...')
-      await loadVideos()
-      console.log('视频列表加载完成，长度:', videoList.value.length)
-    }
-    
-    console.log('调用qaApi.getRecords:', { page: currentPage.value, limit: pageSize })
-    const res = await qaApi.getRecords({
-      page: currentPage.value,
-      limit: pageSize
-    })
-    console.log('获取记录成功:', res)
-    // 直接使用res，不再检查res.data
+    if (videoList.value.length === 0) await loadVideos()
+    const res = await qaApi.getRecords({ page: currentPage.value, limit: pageSize })
     records.value = res.records || res.data?.records || []
     totalPages.value = Math.ceil((res.total || res.data?.total || 0) / pageSize)
-    console.log('记录数据:', records.value)
   } catch (error) {
     console.error('加载记录失败:', error)
     showNotificationBanner('加载记录失败', 'error')
-    // 确保即使失败也清空记录，避免显示旧数据
     records.value = []
     totalPages.value = 1
   } finally {
-    console.log('加载记录完成，设置loading为false')
     loading.value = false
   }
 }
-
-function handleSearch() {
-  console.log('搜索:', searchQuery.value)
-}
-
-function handleFilter() {
-  console.log('筛选状态:', filterStatus.value)
-}
+function handleSearch() { console.log('搜索:', searchQuery.value) }
+function handleFilter() { console.log('筛选状态:', filterStatus.value) }
 
 async function viewRecord(record) {
-  console.log('=== 开始查看记录详情 ===')
-  console.log('记录ID:', record.record_id)
-  
-  // 确保视频列表已经加载
-  console.log('当前视频列表长度:', videoList.value.length)
-  if (videoList.value.length === 0) {
-    console.log('视频列表为空，开始加载...')
-    await loadVideos()
-    console.log('视频列表加载完成，长度:', videoList.value.length)
-  }
-  
-  // 保存记录详情
+  if (videoList.value.length === 0) await loadVideos()
   viewRecordDetail.value = record
   relatedVideos.value = record.video_paths || []
-  
-  console.log('记录详情:', record)
-  console.log('相关视频路径:', relatedVideos.value)
-  console.log('视频列表:', videoList.value)
-  
-  // 测试getVideoNameByPath函数
-  if (record.video_paths && record.video_paths.length > 0) {
-    console.log('=== 测试getVideoNameByPath函数 ===')
-    record.video_paths.forEach((videoPath, index) => {
-      console.log(`\n视频路径 ${index}: ${videoPath}`)
-      const videoName = getVideoNameByPath(videoPath)
-      console.log(`视频名称 ${index}: ${videoName}`)
-    })
-  }
-  
-  // 测试getDeletedVideoCount函数
-  console.log('=== 测试getDeletedVideoCount函数 ===')
-  const deletedCount = getDeletedVideoCount()
-  console.log('被删除视频数量:', deletedCount)
-  console.log('=== 查看记录详情完成 ===')
 }
-
 async function deleteRecord(recordId) {
   if (!confirm('确定要删除这条问答记录吗？')) return
-  
   try {
     await qaApi.deleteRecord(recordId)
     showNotificationBanner('删除成功', 'success')
@@ -875,46 +695,28 @@ async function deleteRecord(recordId) {
     showNotificationBanner('删除失败：' + error.message, 'error')
   }
 }
-
 async function submitQuestion() {
   if (!questionInput.value.trim() || selectedVideos.value.length === 0) {
     ElMessage.warning('请输入问题并选择视频')
     return
   }
-
   try {
     const videoPaths = selectedVideos.value.map(v => v.video_path)
-    const result = await qaApi.askQuestion({
-      question: questionInput.value,
-      video_paths: videoPaths
-    })
-    
+    const result = await qaApi.askQuestion({ question: questionInput.value, video_paths: videoPaths })
     questionInput.value = ''
-    
     await loadStats()
     await loadRecords()
-    
     showNotificationBanner('问题已提交，AI 正在分析中...', 'success')
-    
-    if (result.data && result.data.record_id) {
-      processedTasks.delete(result.data.record_id)
-    }
+    if (result.data && result.data.record_id) processedTasks.delete(result.data.record_id)
   } catch (error) {
     console.error('提问失败:', error)
     showNotificationBanner('提问失败：' + error.message, 'error')
   }
 }
-
-
-
 async function handleExport() {
   try {
     const res = await qaApi.exportRecords('json')
-    
-    if (!res.data) {
-      throw new Error('返回数据为空')
-    }
-    
+    if (!res.data) throw new Error('返回数据为空')
     const blob = new Blob([res.data], { type: 'application/json' })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -928,116 +730,55 @@ async function handleExport() {
     showNotificationBanner('导出失败：' + (error.message || '未知错误'), 'error')
   }
 }
-
 function changePage(page) {
   currentPage.value = page
   loadRecords()
 }
-
 function formatTime(timestamp) {
   if (!timestamp) return ''
   const date = new Date(timestamp)
   return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit'
   })
 }
-
 function truncateAnswer(answer, maxLength = 100) {
-  if (!answer) return '无回答'
-  if (typeof answer !== 'string') return '无回答'
+  if (!answer || typeof answer !== 'string') return '无回答'
   if (answer.length <= maxLength) return answer
   return answer.substring(0, maxLength) + '...'
 }
-
-// 从视频路径中提取视频uid
 function getVideoIdFromPath(videoPath) {
   try {
     if (!videoPath) return null
     const filename = videoPath.split('/').pop()
     if (!filename) return null
-    return filename.split('.')[0] // 提取文件名中的video_id部分
+    return filename.split('.')[0]
   } catch (error) {
     console.error('提取视频uid时出错:', error)
     return null
   }
 }
-
-// 根据视频路径获取视频名称
 function getVideoNameByPath(videoPath) {
   try {
-    console.log('=== 获取视频名称开始 ===')
-    console.log('视频路径:', videoPath)
-    console.log('视频列表长度:', videoList.value.length)
-    console.log('视频列表:', videoList.value)
-    
-    if (!videoPath) {
-      console.log('视频路径为空')
-      return null
-    }
-    
-    // 从视频路径中提取视频uid
+    if (!videoPath) return null
     const videoId = getVideoIdFromPath(videoPath)
-    console.log('提取的video_id:', videoId)
-    
-    // 通过video_id查找视频
     if (videoId) {
-      console.log('开始通过video_id查找视频...')
-      const video = videoList.value.find(v => {
-        console.log('比较视频:', v.video_id, '===', videoId)
-        return v.video_id === videoId
-      })
-      console.log('通过video_id匹配结果:', video)
-      if (video) {
-        console.log('找到视频，名称:', video.video_name)
-        return video.video_name
-      } else {
-        console.log('未找到匹配的视频')
-      }
+      const video = videoList.value.find(v => v.video_id === videoId)
+      if (video) return video.video_name
     }
-    
-    // 如果没有找到，尝试通过完整路径匹配
-    console.log('尝试通过完整路径匹配...')
     const video = videoList.value.find(v => v.video_path === videoPath)
-    console.log('通过完整路径匹配结果:', video)
-    
-    console.log('最终视频名称:', video ? video.video_name : null)
-    console.log('=== 获取视频名称结束 ===')
-    return video ? video.video_name : null // 当视频不存在时返回null
+    return video ? video.video_name : null
   } catch (error) {
     console.error('获取视频名称时出错:', error)
     return null
   }
 }
-
-// 检查视频是否是当前记录的相关视频
 function isRelatedVideo(videoPath) {
   try {
-    if (!videoPath) {
-      return false
-    }
-    
-    // 尝试通过完整路径匹配
-    if (relatedVideos.value.includes(videoPath)) {
-      return true
-    }
-    
-    // 如果没有找到，尝试通过video_id匹配
+    if (!videoPath) return false
+    if (relatedVideos.value.includes(videoPath)) return true
     const videoId = getVideoIdFromPath(videoPath)
     if (videoId) {
-      // 检查relatedVideos中是否有包含相同video_id的路径
-      return relatedVideos.value.some(relatedPath => {
-        try {
-          const relatedVideoId = getVideoIdFromPath(relatedPath)
-          return relatedVideoId === videoId
-        } catch (error) {
-          console.error('检查相关视频时出错:', error)
-          return false
-        }
-      })
+      return relatedVideos.value.some(relatedPath => getVideoIdFromPath(relatedPath) === videoId)
     }
     return false
   } catch (error) {
@@ -1045,25 +786,13 @@ function isRelatedVideo(videoPath) {
     return false
   }
 }
-
-// 计算被删除的视频数量
 function getDeletedVideoCount() {
   try {
-    if (!viewRecordDetail.value || !viewRecordDetail.value.video_paths) {
-      return 0
-    }
-    
+    if (!viewRecordDetail.value || !viewRecordDetail.value.video_paths) return 0
     return viewRecordDetail.value.video_paths.filter(videoPath => {
-      try {
-        // 从视频路径中提取视频uid
-        const videoId = getVideoIdFromPath(videoPath)
-        // 检查视频列表中是否存在该uid的视频
-        const videoExists = videoId ? videoList.value.some(v => v.video_id === videoId) : false
-        return !videoExists
-      } catch (error) {
-        console.error('检查视频是否存在时出错:', error)
-        return false
-      }
+      const videoId = getVideoIdFromPath(videoPath)
+      const videoExists = videoId ? videoList.value.some(v => v.video_id === videoId) : false
+      return !videoExists
     }).length
   } catch (error) {
     console.error('计算被删除视频数量时出错:', error)
@@ -1076,164 +805,134 @@ function getDeletedVideoCount() {
 .integrated-qa-container {
   height: 100vh;
   min-height: 100vh;
-  background: #f5f7fa;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
+  color: var(--text-main);
+  background:
+    radial-gradient(1200px 600px at 10% 0%, color-mix(in srgb, var(--primary) 12%, transparent) 0%, transparent 50%),
+    radial-gradient(1000px 500px at 90% 10%, color-mix(in srgb, var(--accent) 10%, transparent) 0%, transparent 45%),
+    linear-gradient(180deg, var(--bg-page) 0%, var(--bg-page-2) 100%);
 }
 
-/* 布局优化，确保在不同缩放级别下保持稳定 */
-* {
-  box-sizing: border-box;
-  -webkit-text-size-adjust: 100%;
-  -moz-text-size-adjust: 100%;
-  -ms-text-size-adjust: 100%;
-  text-size-adjust: 100%;
+.qa-bg-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(400px 180px at 20% 15%, color-mix(in srgb, var(--primary) 18%, transparent), transparent 70%),
+    radial-gradient(360px 160px at 80% 20%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%);
+  z-index: 0;
 }
 
-/* 用户名设置栏 */
+* { box-sizing: border-box; }
+
 .user-bar {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  position: relative;
+  z-index: 2;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
   padding: 16px 24px;
-  box-shadow: 0 2px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--primary) 28%, transparent);
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
+.user-info { display: flex; align-items: center; gap: 12px; }
+.user-label, .username-display { color: white; font-weight: 600; font-size: 15px; }
 
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.actions { display: flex; align-items: center; gap: 10px; }
+.theme-tools { display: flex; align-items: center; gap: 8px; }
+
+.theme-btn {
+  border: 1px solid rgba(255,255,255,.35);
+  background: rgba(255,255,255,.2);
+  color: #fff;
+  border-radius: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: all .2s;
 }
+.theme-btn:hover { transform: translateY(-1px); background: rgba(255,255,255,.28); }
 
-.user-label {
+.dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,.86);
+  cursor: pointer;
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.dot:hover { transform: scale(1.08); }
+.dot.active { box-shadow: 0 0 0 3px rgba(255,255,255,.28); }
+
+.dot.violet { background: linear-gradient(135deg,#6d5bff,#ff4da6); }
+.dot.teal { background: linear-gradient(135deg,#06b6d4,#10b981); }
+.dot.rose { background: linear-gradient(135deg,#e11d48,#fb7185); }
+
+.btn-profile {
+  padding: 8px 18px;
   color: white;
-  font-weight: 600;
-  font-size: 15px;
-}
-
-.username-input {
-  flex: 1;
-  max-width: 300px;
-  padding: 8px 14px;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  background: rgba(255, 255, 255, 0.95);
-  transition: all 0.3s;
-}
-
-.username-input:focus {
-  outline: none;
-  background: white;
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
-}
-
-.username-display {
-  color: white;
-  font-weight: 600;
-  font-size: 15px;
-}
-
-.actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.btn-profile,
-.btn-logout {
-  padding: 8px 20px;
-  background: rgba(255, 255, 255, 0.2);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 6px;
+  border-radius: 8px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s;
   font-size: 14px;
+  backdrop-filter: blur(8px);
+  background: rgba(255,255,255,.18);
+  border: 1px solid rgba(255,255,255,.35);
+  transition: all .2s;
 }
+.btn-profile:hover { transform: translateY(-2px); background: rgba(255,255,255,.26); }
 
-.btn-profile:hover,
-.btn-logout:hover {
-  background: rgba(255, 255, 255, 0.3);
-  transform: translateY(-1px);
-}
-
-/* 通知横幅 */
 .notification-banner {
   position: fixed;
   top: 20px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 1001;
-  padding: 16px 24px;
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  padding: 14px 20px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.14);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 14px;
   min-width: 300px;
-  max-width: 600px;
+  max-width: 640px;
+  backdrop-filter: blur(8px);
 }
-
 .notification-banner.success {
-  background: #f6ffed;
-  border: 1px solid #b7eb8f;
-  color: #52c41a;
+  background: rgba(34,197,94,.12);
+  border: 1px solid rgba(34,197,94,.35);
+  color: #15803d;
 }
-
 .notification-banner.error {
-  background: #fff2f0;
-  border: 1px solid #ffccc7;
-  color: #ff4d4f;
+  background: rgba(239,68,68,.12);
+  border: 1px solid rgba(239,68,68,.35);
+  color: #dc2626;
 }
-
-.notification-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
-}
-
-.notification-icon {
-  font-size: 20px;
-}
-
-.notification-message {
-  font-size: 14px;
-  font-weight: 500;
-}
-
+.notification-content { display: flex; align-items: center; gap: 12px; flex: 1; }
+.notification-icon { font-size: 20px; }
+.notification-message { font-size: 14px; font-weight: 500; }
 .notification-close {
   padding: 4px 8px;
   border: none;
   background: transparent;
   font-size: 20px;
   cursor: pointer;
-  opacity: 0.6;
-  transition: opacity 0.3s;
+  opacity: .6;
 }
+.notification-close:hover { opacity: 1; }
 
-.notification-close:hover {
-  opacity: 1;
-}
-
-.slide-down-enter-active,
-.slide-down-leave-active {
-  transition: all 0.3s ease;
-}
-
-.slide-down-enter-from,
-.slide-down-leave-to {
+.slide-down-enter-active, .slide-down-leave-active { transition: all .3s ease; }
+.slide-down-enter-from, .slide-down-leave-to {
   transform: translateX(-50%) translateY(-100%);
   opacity: 0;
 }
 
-/* 主布局 */
 .main-layout {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: 3fr 7fr 4fr;
   gap: 20px;
@@ -1242,89 +941,82 @@ function getDeletedVideoCount() {
   overflow: hidden;
 }
 
-/* 视频列表面板 */
-.video-panel {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  display: flex;
-  flex-direction: column;
+.video-panel,
+.player-card,
+.question-card,
+.records-panel,
+.record-detail-panel {
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border-soft);
+  background: var(--bg-card);
+  position: relative;
   overflow: hidden;
 }
-
-/* 问答区域 */
-.qa-section {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  overflow: hidden;
+.video-panel::before,
+.player-card::before,
+.question-card::before,
+.records-panel::before,
+.record-detail-panel::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(
+    120deg,
+    color-mix(in srgb, var(--primary) 26%, transparent),
+    color-mix(in srgb, var(--accent) 22%, transparent),
+    color-mix(in srgb, var(--success) 18%, transparent)
+  );
+  filter: blur(14px);
+  opacity: .32;
+  z-index: 0;
+  pointer-events: none;
+}
+.video-panel > *, .player-card > *, .question-card > *, .records-panel > *, .record-detail-panel > * {
+  position: relative;
+  z-index: 1;
 }
 
-/* 提问面板 */
-.question-panel {
-  flex-shrink: 0;
-}
+.video-panel { display: flex; flex-direction: column; overflow: hidden; }
+.qa-section { display: flex; flex-direction: column; gap: 20px; overflow: hidden; }
+.question-panel { flex-shrink: 0; }
 
-.question-card {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
+.question-card { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
 .question-header {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent);
   padding-bottom: 16px;
 }
-
 .question-header h2 {
   margin: 0;
   font-size: 18px;
-  color: #333;
+  color: var(--text-main);
   display: flex;
   align-items: center;
   gap: 8px;
 }
+.question-desc { margin: 0; font-size: 13px; color: var(--text-muted); }
 
-.question-desc {
-  margin: 0;
-  font-size: 13px;
-  color: #999;
+.question-input-area { display: flex; flex-direction: column; gap: 12px; }
+.question-input { width: 100%; }
+.question-input :deep(.el-textarea__inner) {
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--text-main) 12%, transparent);
+  transition: all .2s ease;
+  background: color-mix(in srgb, var(--bg-card) 80%, #fff 20%);
+  color: var(--text-main);
 }
-
-.question-input-area {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.question-input :deep(.el-textarea__inner:focus) {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 14%, transparent);
 }
+.question-actions { display: flex; justify-content: space-between; align-items: center; }
+.selected-count { font-size: 13px; color: var(--text-muted); }
 
-.question-input {
-  width: 100%;
-}
-
-.question-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.selected-count {
-  font-size: 13px;
-  color: #666;
-}
-
-/* 记录面板 */
 .records-panel {
   flex: 1;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1333,435 +1025,225 @@ function getDeletedVideoCount() {
 
 .panel-header {
   padding: 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent);
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
-
 .panel-header h2 {
   margin: 0;
   font-size: 18px;
-  color: #333;
+  color: var(--text-main);
   display: flex;
   align-items: center;
   gap: 8px;
   justify-content: space-between;
 }
+.panel-desc { margin: 0; font-size: 13px; color: var(--text-muted); }
+.btn-upload { align-self: flex-start; }
 
-.panel-desc {
-  margin: 0;
-  font-size: 13px;
-  color: #999;
-}
+.video-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.upload-form { padding: 20px 0; }
 
-.btn-upload {
-  align-self: flex-start;
-}
-
-.video-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.upload-form {
-  padding: 20px 0;
-}
-
-.file-info {
+.file-info,
+.current-name {
   margin-top: 12px;
   font-size: 14px;
-  color: #666;
-  background: #f5f7fa;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--bg-card) 70%, #eef2ff 30%);
   padding: 8px 12px;
-  border-radius: 4px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent);
 }
 
-.current-name {
-  font-size: 14px;
-  color: #999;
-  background: #f5f7fa;
-  padding: 8px 12px;
-  border-radius: 4px;
-  border: 1px solid #e8e8e8;
-}
-
-.video-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-}
-
+.video-list { flex: 1; overflow-y: auto; padding: 16px; }
 .video-item {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px;
-  border-radius: 8px;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.3s;
-  border: 1px solid #f0f0f0;
+  border: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent);
   margin-bottom: 12px;
+  transition: all .22s ease;
+  background: color-mix(in srgb, var(--bg-card) 88%, transparent);
 }
-
 .video-item:hover {
-  background: #f5f7fa;
-  border-color: #d9d9d9;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--primary) 12%, transparent);
 }
-
 .video-item.active {
-  background: #e6f7ff;
-  border-color: #1890ff;
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  border-color: var(--primary);
 }
-
 .video-item.related-video {
-  border: 2px solid #52c41a;
-  background: #f6ffed;
+  border: 2px solid var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
 }
 
 .video-icon-wrapper {
   width: 40px;
   height: 40px;
   border-radius: 8px;
-  background: #f0f2f5;
-  color: #909399;
+  background: color-mix(in srgb, var(--text-main) 8%, transparent);
+  color: color-mix(in srgb, var(--text-main) 70%, #fff 30%);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 20px;
-  transition: all 0.3s;
 }
-
 .video-icon-wrapper.is-active {
-  background: linear-gradient(135deg, #2d73ff 0%, #6d3bf5 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  color: #fff;
 }
 
-.video-info {
-  flex: 1;
-  overflow: hidden;
-}
-
+.video-info { flex: 1; overflow: hidden; }
 .video-title {
   font-size: 14px;
-  color: #333;
+  color: var(--text-main);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   margin-bottom: 4px;
 }
-
 .video-path {
   font-size: 11px;
-  color: #999;
+  color: var(--text-muted);
   font-family: 'Courier New', monospace;
   word-break: break-all;
 }
-
-.video-checkbox {
-  flex-shrink: 0;
-}
+.video-checkbox { flex-shrink: 0; }
 
 .video-stats {
   display: flex;
   gap: 20px;
   padding: 16px 20px;
-  border-top: 1px solid #f0f0f0;
-  background: #fafafa;
+  border-top: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent);
+  background: color-mix(in srgb, var(--bg-card) 70%, #eef2ff 30%);
 }
+.video-stats .stat-item { display: flex; flex-direction: column; gap: 4px; }
+.video-stats .stat-label { font-size: 12px; color: var(--text-muted); }
+.video-stats .stat-value { font-size: 20px; font-weight: bold; color: var(--text-main); }
+.video-stats .stat-value.highlight { color: var(--primary); }
 
-.video-stats .stat-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.video-stats .stat-label {
-  font-size: 12px;
-  color: #999;
-}
-
-.video-stats .stat-value {
-  font-size: 20px;
-  font-weight: bold;
-  color: #333;
-}
-
-.video-stats .stat-value.highlight {
-  color: #1890ff;
-}
-
-/* 播放器区域 */
-.player-section {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  overflow: hidden;
-  flex: 1;
-}
-
-.player-card {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  flex: 1;
-  min-height: 0;
-}
+.player-section { display: flex; flex-direction: column; gap: 16px; overflow: hidden; flex: 1; }
+.player-card { display: flex; flex-direction: column; overflow: hidden; flex: 1; min-height: 0; }
 
 .player-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent);
 }
-
 .player-title {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 16px;
   font-weight: 500;
-  color: #333;
+  color: var(--text-main);
 }
-
 .player-wrapper {
   flex: 1;
   background: #000;
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
-  min-height: 0;
   min-height: 300px;
 }
-
-.video-player {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  outline: none;
-}
-
-.empty-player {
-  color: #999;
-  text-align: center;
-}
-
-.empty-icon {
-  font-size: 56px;
-  margin-bottom: 16px;
-  opacity: 0.5;
-}
-
-.quick-actions {
-  display: flex;
-  gap: 12px;
-  padding: 0 4px;
-}
-
-.btn-ask-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-  padding: 12px 24px;
-  font-weight: 500;
-}
-
-.btn-ask-primary:hover {
-  opacity: 0.9;
-}
-
-
+.video-player { width: 100%; height: 100%; object-fit: contain; outline: none; }
+.empty-player { color: #999; text-align: center; }
+.empty-icon { font-size: 56px; margin-bottom: 16px; opacity: .5; }
 
 .stats-bar {
   display: flex;
   align-items: center;
   gap: 30px;
   padding: 16px 20px;
-  background: #fafafa;
-  border-bottom: 1px solid #f0f0f0;
+  background: color-mix(in srgb, var(--bg-card) 75%, #eef2ff 25%);
+  border-bottom: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent);
 }
+.stats-bar .stat-item { display: flex; flex-direction: column; gap: 4px; }
+.stats-bar .stat-label { font-size: 12px; color: var(--text-muted); }
+.stats-bar .stat-value { font-size: 20px; font-weight: bold; color: var(--text-main); letter-spacing: .3px; }
+.stats-bar .stat-item.success .stat-value { color: #16a34a; }
+.stats-bar .stat-item.failure .stat-value { color: #dc2626; }
+.stats-bar .stat-item.processing .stat-value { color: var(--primary); }
+.stats-bar .stat-actions { margin-left: auto; }
 
-.stats-bar .stat-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.stats-bar .stat-label {
-  font-size: 12px;
-  color: #999;
-}
-
-.stats-bar .stat-value {
-  font-size: 20px;
-  font-weight: bold;
-  color: #333;
-}
-
-.stats-bar .stat-item.success .stat-value {
-  color: #52c41a;
-}
-
-.stats-bar .stat-item.failure .stat-value {
-  color: #ff4d4f;
-}
-
-.stats-bar .stat-item.processing .stat-value {
-  color: #1890ff;
-}
-
-.stats-bar .stat-actions {
-  margin-left: auto;
-}
-
-.search-bar {
-  display: flex;
-  gap: 12px;
-  padding: 16px 20px;
-  border-bottom: 1px solid #f0f0f0;
-}
-
+.search-bar { display: flex; gap: 12px; padding: 16px 20px; border-bottom: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent); }
 .search-input {
   flex: 1;
   padding: 8px 12px;
-  border: 1px solid #d9d9d9;
-  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--text-main) 16%, transparent);
+  border-radius: 8px;
   font-size: 14px;
   outline: none;
-  transition: border-color 0.3s;
+  color: var(--text-main);
+  background: color-mix(in srgb, var(--bg-card) 86%, transparent);
 }
-
 .search-input:focus {
-  border-color: #1890ff;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 12%, transparent);
 }
-
 .filter-select {
   padding: 8px 12px;
-  border: 1px solid #d9d9d9;
-  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--text-main) 16%, transparent);
+  border-radius: 8px;
   font-size: 14px;
-  background: white;
+  background: color-mix(in srgb, var(--bg-card) 86%, transparent);
+  color: var(--text-main);
   cursor: pointer;
 }
 
-.question-input-area {
-  padding: 16px 20px;
-  border-bottom: 1px solid #f0f0f0;
-  background: #fafafa;
-}
-
-.question-input {
-  margin-bottom: 12px;
-  width: 100%;
-}
-
-.question-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.selected-count {
-  font-size: 13px;
-  color: #666;
-}
-
-.records-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-}
-
-.loading-state,
-.empty-state {
+.records-list { flex: 1; overflow-y: auto; padding: 20px; }
+.loading-state, .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   padding: 60px 20px;
-  color: #999;
+  color: var(--text-muted);
 }
-
 .spinner {
   width: 40px;
   height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #1890ff;
+  border: 4px solid color-mix(in srgb, var(--text-main) 15%, transparent);
+  border-top: 4px solid var(--primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
-  margin-bottom: 16px;
 }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.empty-icon {
-  font-size: 64px;
-  margin-bottom: 16px;
-}
-
-.records-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 16px;
-}
+.records-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 16px; }
 
 .record-card {
-  background: white;
+  background: color-mix(in srgb, var(--bg-card) 95%, transparent);
   border-radius: 12px;
   padding: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s;
-  border-left: 4px solid #d9d9d9;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--text-main) 10%, transparent);
+  border-left: 5px solid color-mix(in srgb, var(--text-main) 18%, transparent);
+  transition: all .22s ease;
 }
-
-.record-card.record-processing {
-  border-left-color: #1890ff;
-  background: #e6f7ff;
-}
-
-.record-card.record-success {
-  border-left-color: #52c41a;
-}
-
-.record-card.record-failure {
-  border-left-color: #ff4d4f;
-}
-
 .record-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-  transform: translateY(-2px);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--primary) 16%, transparent);
+  transform: translateY(-3px);
   cursor: pointer;
 }
-
-
-
-.record-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
+.record-card.record-processing {
+  border-left-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
 }
+.record-card.record-success { border-left-color: var(--success); }
+.record-card.record-failure { border-left-color: var(--danger); }
 
-.record-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.record-time {
-  font-size: 12px;
-  color: #999;
-}
+.record-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.record-meta { display: flex; align-items: center; gap: 8px; }
+.record-time { font-size: 12px; color: var(--text-muted); }
 
 .record-status {
   padding: 2px 8px;
@@ -1771,46 +1253,23 @@ function getDeletedVideoCount() {
   align-items: center;
   gap: 4px;
 }
-
-.status-success {
-  background: #f6ffed;
-  color: #52c41a;
-}
-
-.status-failure {
-  background: #fff2f0;
-  color: #ff4d4f;
-}
-
-.status-processing {
-  background: #e6f7ff;
-  color: #1890ff;
-}
+.status-success { background: rgba(34,197,94,.14); color: #15803d; }
+.status-failure { background: rgba(239,68,68,.14); color: #dc2626; }
+.status-processing { background: color-mix(in srgb, var(--primary) 18%, transparent); color: var(--primary); }
 
 .pulse-dot {
   width: 6px;
   height: 6px;
-  background: #1890ff;
+  background: var(--primary);
   border-radius: 50%;
   animation: pulse 1s ease-in-out infinite;
 }
-
 @keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.5;
-    transform: scale(1.2);
-  }
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .5; transform: scale(1.2); }
 }
 
-.record-actions {
-  display: flex;
-  gap: 4px;
-}
-
+.record-actions { display: flex; gap: 4px; }
 .btn-icon {
   padding: 4px 8px;
   border: none;
@@ -1818,81 +1277,42 @@ function getDeletedVideoCount() {
   cursor: pointer;
   border-radius: 4px;
   font-size: 14px;
-  transition: background 0.3s;
 }
+.btn-icon:hover { background: color-mix(in srgb, var(--text-main) 8%, transparent); }
 
-.btn-icon:hover {
-  background: #f5f5f5;
-}
+.record-content { margin-bottom: 12px; }
+.record-question, .record-answer { margin-bottom: 8px; line-height: 1.5; }
+.label { font-weight: bold; color: var(--text-main); margin-right: 4px; }
+.text { color: color-mix(in srgb, var(--text-main) 78%, #fff 22%); font-size: 14px; }
 
-.record-content {
-  margin-bottom: 12px;
-}
-
-.record-question,
-.record-answer {
-  margin-bottom: 8px;
-  line-height: 1.5;
-}
-
-.label {
-  font-weight: bold;
-  color: #333;
-  margin-right: 4px;
-}
-
-.text {
-  color: #666;
-  font-size: 14px;
-}
-
-.answer-text {
-  display: block;
-  max-height: 60px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.processing-text {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #1890ff;
-  font-style: italic;
-}
-
+.answer-text { display: block; max-height: 60px; overflow: hidden; text-overflow: ellipsis; }
+.processing-text { display: flex; align-items: center; gap: 8px; color: var(--primary); font-style: italic; }
 .spinner-small {
   width: 14px;
   height: 14px;
-  border: 2px solid #e6f7ff;
-  border-top-color: #1890ff;
+  border: 2px solid color-mix(in srgb, var(--primary) 18%, transparent);
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
 
 .record-footer {
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent);
   padding-top: 12px;
 }
-
-.video-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
+.video-tags { display: flex; flex-wrap: wrap; gap: 8px; }
 .video-tag {
   padding: 4px 10px;
-  background: #e6f7ff;
-  color: #1890ff;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
   border-radius: 12px;
   font-size: 11px;
+  border: 1px solid color-mix(in srgb, var(--primary) 26%, transparent);
 }
-
 .deleted-tag {
   padding: 4px 10px;
-  background: #fff2f0;
-  color: #ff4d4f;
+  background: rgba(239,68,68,.12);
+  color: #e11d48;
   border-radius: 12px;
   font-size: 11px;
   font-weight: 500;
@@ -1904,49 +1324,30 @@ function getDeletedVideoCount() {
   align-items: center;
   gap: 16px;
   padding: 16px;
-  border-top: 1px solid #f0f0f0;
-  background: #fafafa;
+  border-top: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent);
+  background: color-mix(in srgb, var(--bg-card) 70%, #eef2ff 30%);
 }
+.page-info { color: var(--text-muted); font-size: 13px; }
 
-.page-info {
-  color: #666;
-  font-size: 13px;
-}
-
-/* 记录详情面板样式 */
-.record-detail-panel {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  height: 100%;
-}
-
+.record-detail-panel { display: flex; flex-direction: column; overflow: hidden; height: 100%; }
 .detail-header {
   padding: 20px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent);
   display: flex;
   align-items: center;
   gap: 16px;
-  background: #fafafa;
+  background: color-mix(in srgb, var(--bg-card) 72%, #eef2ff 28%);
 }
-
-.back-button {
-  flex-shrink: 0;
-}
-
+.back-button { flex-shrink: 0; }
 .detail-header h2 {
   margin: 0;
   font-size: 18px;
-  color: #333;
+  color: var(--text-main);
   display: flex;
   align-items: center;
   gap: 8px;
   flex: 1;
 }
-
 .detail-content {
   padding: 20px;
   flex: 1;
@@ -1955,20 +1356,14 @@ function getDeletedVideoCount() {
   flex-direction: column;
   gap: 20px;
 }
-
 .detail-meta {
   display: flex;
   align-items: center;
   gap: 12px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent);
 }
-
-.detail-time {
-  font-size: 14px;
-  color: #999;
-}
-
+.detail-time { font-size: 14px; color: var(--text-muted); }
 .detail-status {
   padding: 4px 12px;
   border-radius: 4px;
@@ -1978,113 +1373,108 @@ function getDeletedVideoCount() {
   gap: 4px;
 }
 
-.detail-question,
-.detail-answer,
-.detail-videos {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.detail-question h3,
-.detail-answer h3,
-.detail-videos h3 {
+.detail-question, .detail-answer, .detail-videos { display: flex; flex-direction: column; gap: 8px; }
+.detail-question h3, .detail-answer h3, .detail-videos h3 {
   margin: 0;
   font-size: 16px;
-  color: #333;
+  color: var(--text-main);
   font-weight: 600;
 }
-
-.question-content,
-.answer-content {
+.question-content, .answer-content {
   padding: 16px;
-  background: #f5f7fa;
+  background: color-mix(in srgb, var(--bg-card) 72%, #eef2ff 28%);
   border-radius: 8px;
   line-height: 1.6;
-  color: #333;
+  color: var(--text-main);
   white-space: pre-wrap;
   word-break: break-word;
 }
-
-.detail-videos .video-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.deleted-videos-info {
-  margin-top: 8px;
-}
-
-.deleted-count {
-  color: #ff4d4f;
-  font-size: 12px;
-  font-weight: 500;
-}
+.detail-videos .video-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.deleted-videos-info { margin-top: 8px; }
+.deleted-count { color: var(--danger); font-size: 12px; font-weight: 500; }
 
 .detail-actions {
   padding-top: 16px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent);
   display: flex;
   gap: 12px;
 }
 
-/* 响应式设计 */
-@media (max-width: 1400px) {
-  .main-layout {
-    grid-template-columns: 2.5fr 6fr 4fr;
-  }
+/* Element Plus 主按钮 */
+:deep(.el-button--primary) {
+  background: linear-gradient(135deg, var(--primary), var(--accent)) !important;
+  border: none !important;
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--primary) 24%, transparent);
+  animation: glowPulse 2.2s ease-in-out infinite;
+}
+:deep(.el-button--primary:hover) {
+  transform: translateY(-1px);
+  opacity: .95;
+}
+@keyframes glowPulse {
+  0%,100% { box-shadow: 0 8px 18px color-mix(in srgb, var(--primary) 24%, transparent); }
+  50% { box-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 30%, transparent); }
 }
 
+.video-list::-webkit-scrollbar,
+.records-list::-webkit-scrollbar,
+.detail-content::-webkit-scrollbar {
+  width: 8px;
+}
+.video-list::-webkit-scrollbar-thumb,
+.records-list::-webkit-scrollbar-thumb,
+.detail-content::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 42%, #fff), color-mix(in srgb, var(--primary-2) 40%, #fff));
+  border-radius: 999px;
+}
+.video-list::-webkit-scrollbar-track,
+.records-list::-webkit-scrollbar-track,
+.detail-content::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  border-radius: 999px;
+}
+
+/* 鼠标点击特效 */
+.click-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+}
+.click-ripple {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  margin-top: -7px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent) 70%, #fff 30%);
+  box-shadow: 0 0 18px color-mix(in srgb, var(--primary) 45%, transparent);
+  animation: ripple .65s ease-out forwards;
+}
+@keyframes ripple {
+  0% { transform: scale(.4); opacity: .9; }
+  100% { transform: scale(5.5); opacity: 0; }
+}
+
+@media (max-width: 1400px) {
+  .main-layout { grid-template-columns: 2.5fr 6fr 4fr; }
+}
 @media (max-width: 1200px) {
   .main-layout {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto auto auto;
+    padding: 12px;
   }
-  
-  .video-panel {
-    max-height: 250px;
-  }
-  
-  .player-section {
-    min-height: 400px;
-  }
-  
-  .records-panel {
-    max-height: none;
-    min-height: 400px;
-  }
-  
-  .record-detail-panel {
-    min-height: 400px;
-  }
+  .video-panel { max-height: 250px; }
+  .player-section { min-height: 400px; }
+  .records-panel { max-height: none; min-height: 400px; }
+  .record-detail-panel { min-height: 400px; }
 }
-
 @media (max-width: 768px) {
-  .main-layout {
-    padding: 10px;
-    gap: 10px;
-  }
-  
-  .question-card {
-    padding: 16px;
-  }
-  
-  .player-section {
-    min-height: 300px;
-  }
-  
-  .records-panel {
-    min-height: 300px;
-  }
-  
-  .record-detail-panel {
-    min-height: 300px;
-  }
-  
-  .detail-content {
-    padding: 16px;
-  }
+  .main-layout { padding: 10px; gap: 10px; }
+  .question-card { padding: 16px; }
+  .player-section, .records-panel, .record-detail-panel { min-height: 300px; }
+  .detail-content { padding: 16px; }
 }
 </style>

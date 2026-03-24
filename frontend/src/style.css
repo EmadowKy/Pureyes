@@ -1,19 +1,88 @@
-html, body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
-  background-color: #f5f7fa;
-  overflow: hidden;
+:root {
+  --primary: #6d5bff;
+  --primary-2: #8b7bff;
+  --accent: #ff4da6;
+  --success: #22c55e;
+  --danger: #ef4444;
+
+  --bg-page: #f4f6ff;
+  --bg-page-2: #eef2ff;
+  --bg-card: rgba(255, 255, 255, 0.9);
+
+  --text-main: #1f2937;
+  --text-muted: #6b7280;
+  --border-soft: rgba(255, 255, 255, 0.72);
+  --shadow: 0 12px 30px rgba(17, 24, 39, 0.14);
+}
+
+/* 暗黑模式 */
+html[data-theme-mode="dark"] {
+  --bg-page: #0f1226;
+  --bg-page-2: #171b36;
+  --bg-card: rgba(24, 28, 52, 0.84);
+
+  --text-main: #e5e7eb;
+  --text-muted: #a1a1aa;
+  --border-soft: rgba(99, 102, 241, 0.28);
+  --shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+}
+
+/* 主题色 - 紫蓝（默认） */
+html[data-theme-color="violet"] {
+  --primary: #6d5bff;
+  --primary-2: #8b7bff;
+  --accent: #ff4da6;
+}
+
+/* 主题色 - 青绿 */
+html[data-theme-color="teal"] {
+  --primary: #06b6d4;
+  --primary-2: #22d3ee;
+  --accent: #10b981;
+}
+
+/* 主题色 - 玫红 */
+html[data-theme-color="rose"] {
+  --primary: #e11d48;
+  --primary-2: #fb7185;
+  --accent: #f43f5e;
 }
 
 * {
   box-sizing: border-box;
 }
 
-#app {
-  width: 100vw;
-  height: 100vh;
-  display: flex;
+html, body, #app {
+  margin: 0;
+  width: 100%;
+  min-height: 100%;
+}
+
+body {
+  color: var(--text-main);
+  font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  background:
+    radial-gradient(1200px 600px at 10% 0%, color-mix(in srgb, var(--primary) 20%, transparent) 0%, transparent 50%),
+    radial-gradient(1000px 500px at 90% 15%, color-mix(in srgb, var(--accent) 16%, transparent) 0%, transparent 45%),
+    linear-gradient(135deg, var(--bg-page), var(--bg-page-2));
+}
+
+/* 背景微粒 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -20%;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 30%, color-mix(in srgb, var(--primary) 30%, transparent) 0 2px, transparent 3px),
+    radial-gradient(circle at 70% 20%, color-mix(in srgb, var(--accent) 24%, transparent) 0 2px, transparent 3px),
+    radial-gradient(circle at 40% 80%, rgba(34, 197, 94, .12) 0 2px, transparent 3px);
+  background-size: 220px 220px, 260px 260px, 300px 300px;
+  animation: starsMove 24s linear infinite;
+  z-index: -1;
+}
+
+@keyframes starsMove {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-120px, -80px, 0); }
 }
