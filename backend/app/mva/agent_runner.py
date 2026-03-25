@@ -83,7 +83,7 @@ class AgentRunner:
         self._sampling_error_happened = True
         print(message)
 
-    def run_on_sample(self, sample: Dict[str, Any], video_base_dir: str, prompt_override: str = None):
+    def run_on_sample(self, sample: Dict[str, Any], video_base_dir: str, prompt_override: str = None, progress_callback=None):
         """
         Run the agent on a single sample and return full details.
         
@@ -138,8 +138,27 @@ class AgentRunner:
 
         process_logs = {
             'initialization': [],
-            'iterations': []
+            'iterations': [],
+            'progress': []
         }
+
+        def _emit_progress(stage, status, message=None, data=None):
+            item = {
+                'timestamp': time.time(),
+                'stage': stage,
+                'status': status,
+                'message': message,
+                'data': data or {}
+            }
+            process_logs.setdefault('progress', []).append(item)
+            if progress_callback:
+                try:
+                    progress_callback(item)
+                except Exception as e:
+                    print(f"Warning: progress_callback failed: {e}")
+
+        # Emit model initialization start
+        _emit_progress('model_initialization', 'started', '模型初始化开始')
         
         # --- Validate Videos ---
         valid_videos = []
@@ -192,6 +211,8 @@ class AgentRunner:
         else:
             self.config['prompts']['tool_combined_action'] = self.config['prompts']['tool_combined_action'].replace("{TOOL_ANALYSIS}", self.config['prompts'].get('tool_analysis', ""))
             self.config['prompts']['desc_combined_action'] = self.config['prompts']['desc_combined_action'].replace("{DESC_ANALYSIS}", self.config['prompts'].get('desc_analysis', ""))
+
+        _emit_progress('model_initialization', 'completed', '模型初始化完成')
 
         # print(self.config['prompts']['tool_combined_action'])
         # print(self.config['prompts']['desc_combined_action'])
@@ -246,6 +267,7 @@ class AgentRunner:
                     f"Expected {num_frames} frames, got 0."
                 )
                 TextBank['videos'][v_name]['status'] = 'tool_terminated'
+                _emit_progress('sampling', 'failed', f"{v_name} 初始采样失败", {'video': v_name, 'expected_frames': num_frames, 'actual': len(frames_info)})
                 process_logs['initialization'].append({
                     'video': v_name,
                     'status': 'sampling_failed',
@@ -270,6 +292,12 @@ class AgentRunner:
 
             if len(TextBank['videos'][v_name]['frame_bank']) > bank_limit:
                 TextBank['videos'][v_name]['frame_bank'] = TextBank['videos'][v_name]['frame_bank'][:bank_limit]
+            
+            _emit_progress('sampling', 'completed', f"{v_name} 初始采样完成", {
+                'video': v_name,
+                'sampled_frames': len(frames_info),
+                'frame_bank_size': len(TextBank['videos'][v_name]['frame_bank'])
+            })
             
             if skip_iteration:
                 continue
@@ -332,6 +360,13 @@ class AgentRunner:
                 if len(TextBank['videos'][v_name]['frame_bank']) > bank_limit:
                     TextBank['videos'][v_name]['frame_bank'] = TextBank['videos'][v_name]['frame_bank'][:bank_limit]
             
+            _emit_progress('description_scoring', 'completed', f"{v_name} 初始描述和评分完成", {
+                'video': v_name,
+                'description': initial_desc,
+                'score': score_new,
+                'priority': TextBank['videos'][v_name].get('priority', 0.0)
+            })
+            
             process_logs['initialization'].append({
                 'video': v_name,
                 'status': 'initialized',
@@ -383,6 +418,12 @@ class AgentRunner:
             v_curr_name = max(active_videos.keys(), key=lambda k: active_videos[k]['priority'])
             v_curr = TextBank['videos'][v_curr_name]
 
+            _emit_progress('iteration', 'started', f"第 {iteration_count+1} 次主循环开始", {
+                'iteration': iteration_count+1,
+                'selected_video': v_curr_name,
+                'priority': v_curr.get('priority')
+            })
+
             v_idx = v_curr['idx']
             if self.config['parameters'].get('number_type') == "123":
                 v_label = f"Video {v_idx}"
@@ -414,6 +455,15 @@ class AgentRunner:
                 question_analysis=TextBank.get('question_analysis', "")
             )
             ed = time.time()
+            
+            _emit_progress('iteration', 'tool_decided', f"第 {iteration_count+1} 次主循环工具决策完成", {
+                'iteration': iteration_count+1,
+                'selected_video': v_curr_name,
+                'option': option,
+                'target_start': target_start,
+                'target_end': target_end,
+                'candidate_scores': candidate_scores
+            })
             
             if self.config['parameters'].get('print_output', False): 
                 print(f"Tool Agent finished for {v_curr_name}, took {(ed - st):.2f} s")
@@ -470,6 +520,14 @@ class AgentRunner:
             new_frame_paths = [f['path'] for f in new_frames_info]
             
             if not new_frame_paths:
+                _emit_progress('sampling', 'failed', f"第 {iteration_count+1} 次主循环采样失败", {
+                    'video': v_curr_name,
+                    'iteration': iteration_count+1,
+                    'option': option,
+                    'target_start': target_start,
+                    'target_end': target_end,
+                    'sampled': 0
+                })
                 self._mark_sampling_error(
                     f"Error: Iteration frame sampling failed for {v_curr_name} ({v_curr['path']}). "
                     f"option={option}, range=({target_start:.2f}, {target_end:.2f}), expected={num_frames}, got=0."
@@ -483,6 +541,14 @@ class AgentRunner:
             if option in [1, 3, 5]:
                 v_curr['current_frames'] = new_frames_info
                 
+            _emit_progress('sampling', 'completed', f"第 {iteration_count+1} 次主循环采样完成", {
+                'video': v_curr_name,
+                'iteration': iteration_count+1,
+                'sampled_frames': len(new_frames_info),
+                'target_start': target_start,
+                'target_end': target_end
+            })
+            
             # Note: We do NOT add new frames to bank yet. They will be scored in the NEXT iteration.
             
             # Create timestamped frames for DescAgent specifically
@@ -568,6 +634,24 @@ class AgentRunner:
                 'video_terminated': v_term,
                 'global_terminated': g_term
             })
+            _emit_progress('description_scoring', 'completed', f"第 {iteration_count+1} 次主循环描述与评分完成", {
+                'video': v_curr_name,
+                'iteration': iteration_count+1,
+                'new_score': score_new,
+                'acceleration': acceleration,
+                'v_term': v_term,
+                'g_term': g_term,
+                'description_snippet': desc_new_part
+            })
+            
+            _emit_progress('iteration', 'completed', f"第 {iteration_count+1} 次主循环完成", {
+                'video': v_curr_name,
+                'iteration': iteration_count+1,
+                'status': v_curr['status'],
+                'score': score_new,
+                'acceleration': acceleration
+            })
+            
             process_logs['iterations'].append(iter_log)
             
             iteration_count += 1
@@ -600,6 +684,12 @@ class AgentRunner:
             final_descriptions_list.append(f"{v_label}: {desc_text}")
         
         final_descriptions_str = "\n".join(final_descriptions_list)
+            
+        _emit_progress('finalization', 'completed', '已生成视频描述和最终候选帧', {
+            'final_descriptions': final_descriptions_str,
+            'num_videos': len(TextBank['videos']),
+            'frame_handler': 'final_frame_paths'
+        })
             
         if not final_frame_paths:
              # Default check, will be refined below based on mode
@@ -658,6 +748,12 @@ class AgentRunner:
                     # Prepend description is standard practice
                     current_prompt_template = current_prompt_template.replace("Question:", f"Video Descriptions:\n{final_descriptions_str}\n\nQuestion:")
 
+            _emit_progress('answering', 'started', '开始生成最终回答', {
+                'use_visual': use_visual,
+                'use_text': use_text,
+                'template': current_prompt_template[:200]
+            })
+            
             if self.config['parameters'].get('print_output', False):
                 print("=======Start Answering=====")
                 st = time.time()
@@ -676,6 +772,10 @@ class AgentRunner:
             if self.config['parameters'].get('print_output', False):
                 ed = time.time()
                 print(f"Answer generation took {(ed - st):.2f} s")
+            
+            _emit_progress('answering', 'completed', '最终回答生成完成', {
+                'answer_preview': output_text.strip()[:200]
+            })
             
             ans_output_clean = output_text.strip()
             predicted_ans = ans_output_clean if ans_output_clean else ""

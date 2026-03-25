@@ -59,8 +59,14 @@ def get_current_user(request_data=None):
 def process_question_async(task_id, user_id, username, question, video_paths, config_path):
     """后台线程处理问题"""
     try:
+        # 初始化任务进度信息
+        running_tasks[task_id]['progress'] = []
+
+        def progress_callback(item):
+            running_tasks[task_id].setdefault('progress', []).append(item)
+
         # 调用模型回答问题
-        result = ask_model(question, video_paths, config_path)
+        result = ask_model(question, video_paths, config_path, progress_callback=progress_callback)
 
         # 提取回答内容 - 优先使用 predicted_answer，其次使用 answer_generation.raw_output
         answer = result.get('predicted_answer') or \
@@ -225,12 +231,18 @@ def get_task_status(task_id):
                 "data": None
             }), 404
         
+        # 合并运行时进度（如果存在）
+        progress = running_tasks.get(task_id, {}).get('progress')
+        if progress:
+            record = {**record, 'model_result': {**record.get('model_result', {}), 'process_logs': {'progress': progress}}}
+        
         return jsonify({
             "code": 200,
             "msg": "获取成功",
             "data": {
                 "status": record.get('status', 'completed'),
-                "record": record
+                "record": record,
+                "progress": progress or record.get('model_result', {}).get('process_logs', {}).get('progress', [])
             }
         })
         
@@ -445,3 +457,30 @@ def export_records():
             "msg": f"服务器错误：{str(e)}",
             "data": None
         }), 500
+
+
+@qa_bp.route('/task/<task_id>/progress', methods=['GET'])
+@jwt_required()
+def get_task_progress(task_id):
+    """获取任务实时进度"""
+    try:
+        uid, username = get_current_user()
+        if not uid:
+            return jsonify({"code":401, "msg":"未认证的用户", "data":None}), 401
+
+        task = running_tasks.get(task_id)
+        if not task:
+            return jsonify({"code":404, "msg":"任务不存在", "data":None}), 404
+
+        return jsonify({
+            "code":200,
+            "msg":"获取成功",
+            "data":{
+                "task_id": task_id,
+                "status": task.get('status', 'processing'),
+                "progress": task.get('progress', [])
+            }
+        })
+
+    except Exception as e:
+        return jsonify({"code":500, "msg": f"服务器错误：{str(e)}", "data":None}), 500

@@ -137,64 +137,190 @@
       <!-- 右侧：问答区域 -->
       <section class="qa-section">
         <!-- 记录详情视图 -->
-        <div v-if="viewRecordDetail" class="record-detail-panel">
+        <div v-if="viewRecordDetail" class="record-detail-panel" :class="{ 'expanded': isDetailExpanded }">
           <div class="detail-header">
-            <el-button @click="() => { viewRecordDetail = null; relatedVideos = [] }" size="small" class="back-button">
+            <el-button @click="() => { viewRecordDetail = null; relatedVideos = []; isDetailExpanded = false }" size="small" class="back-button">
               <el-icon><ArrowLeft /></el-icon> 返回列表
             </el-button>
             <h2><el-icon><ChatLineRound /></el-icon> 问答详情</h2>
+            <el-button @click="toggleDetailExpand" size="small" class="expand-button">
+              <el-icon v-if="isDetailExpanded"><ArrowRight /></el-icon>
+              <el-icon v-else><ArrowLeft /></el-icon>
+              {{ isDetailExpanded ? '收起' : '展开' }}
+            </el-button>
           </div>
 
-          <div class="detail-content">
-            <div class="detail-meta">
-              <span class="detail-time">{{ formatTime(viewRecordDetail.timestamp) }}</span>
-              <span v-if="viewRecordDetail.status === 'processing'" class="detail-status status-processing">
-                <span class="pulse-dot"></span>进行中
-              </span>
-              <span v-else-if="viewRecordDetail.status === 'completed' && viewRecordDetail.success !== false" class="detail-status status-success">
-                成功
-              </span>
-              <span v-else-if="viewRecordDetail.status === 'failed' || viewRecordDetail.success === false" class="detail-status status-failure">
-                失败
-              </span>
-            </div>
-
-            <div class="detail-question">
-              <h3>问题</h3>
-              <div class="question-content">{{ viewRecordDetail.question }}</div>
-            </div>
-
-            <div class="detail-answer">
-              <h3>回答</h3>
-              <div class="answer-content">
-                <span v-if="viewRecordDetail.status === 'processing'" class="processing-text">
-                  <span class="spinner-small"></span>
-                  AI 正在分析中...
+          <div class="detail-content" :class="{ 'expanded-content': isDetailExpanded }">
+            <!-- 非展开状态的布局 -->
+            <div v-if="!isDetailExpanded" class="collapsed-layout">
+              <div class="detail-meta">
+                <span class="detail-time">{{ formatTime(viewRecordDetail.timestamp) }}</span>
+                <span v-if="viewRecordDetail.status === 'processing'" class="detail-status status-processing">
+                  <span class="pulse-dot"></span>进行中
                 </span>
-                <span v-else>{{ viewRecordDetail.model_result?.answer || viewRecordDetail.model_result?.predicted_answer || '无回答' }}</span>
-              </div>
-            </div>
-
-            <div class="detail-videos">
-              <h3>相关视频</h3>
-              <div class="video-list">
-                <span
-                  v-for="(videoPath, index) in viewRecordDetail.video_paths.filter(vp => getVideoNameByPath(vp))"
-                  :key="index"
-                  class="video-tag"
-                >
-                  {{ getVideoNameByPath(videoPath) }}
+                <span v-else-if="viewRecordDetail.status === 'completed' && viewRecordDetail.success !== false" class="detail-status status-success">
+                  成功
+                </span>
+                <span v-else-if="viewRecordDetail.status === 'failed' || viewRecordDetail.success === false" class="detail-status status-failure">
+                  失败
                 </span>
               </div>
-              <div v-if="getDeletedVideoCount() > 0" class="deleted-videos-info">
-                <span class="deleted-count">还有 {{ getDeletedVideoCount() }} 个被删除的视频</span>
+
+              <div class="detail-question">
+                <h3>问题</h3>
+                <div class="question-content">{{ viewRecordDetail.question }}</div>
+              </div>
+
+              <div class="detail-answer">
+                <h3>回答</h3>
+                <div class="answer-content">
+                  <span v-if="viewRecordDetail.status === 'processing'" class="processing-text">
+                    <span class="spinner-small"></span>
+                    AI 正在分析中...
+                  </span>
+                  <span v-else>{{ viewRecordDetail.model_result?.answer || viewRecordDetail.model_result?.predicted_answer || '无回答' }}</span>
+                </div>
+              </div>
+
+              <div class="detail-videos">
+                <h3>相关视频</h3>
+                <div class="video-list">
+                  <span
+                    v-for="(videoPath, index) in viewRecordDetail.video_paths.filter(vp => getVideoNameByPath(vp))"
+                    :key="index"
+                    class="video-tag"
+                  >
+                    {{ getVideoNameByPath(videoPath) }}
+                  </span>
+                </div>
+                <div v-if="getDeletedVideoCount() > 0" class="deleted-videos-info">
+                  <span class="deleted-count">还有 {{ getDeletedVideoCount() }} 个被删除的视频</span>
+                </div>
+              </div>
+
+              <div class="detail-actions">
+                <el-button @click="deleteRecord(viewRecordDetail.record_id)" type="danger" size="small">
+                  <el-icon><Delete /></el-icon> 删除记录
+                </el-button>
               </div>
             </div>
 
-            <div class="detail-actions">
-              <el-button @click="deleteRecord(viewRecordDetail.record_id)" type="danger" size="small">
-                <el-icon><Delete /></el-icon> 删除记录
-              </el-button>
+            <!-- 展开状态的全新布局 -->
+            <div v-else class="expanded-layout">
+              <!-- 顶部信息栏 -->
+              <div class="expanded-top-bar">
+                <div class="expanded-title-section">
+                  <h1 class="expanded-main-title">{{ viewRecordDetail.question }}</h1>
+                  <div class="expanded-meta-info">
+                    <span class="expanded-timestamp">{{ formatTime(viewRecordDetail.timestamp) }}</span>
+                    <span class="status-indicator" :class="{
+                      'status-processing': viewRecordDetail.status === 'processing',
+                      'status-success': viewRecordDetail.status === 'completed' && viewRecordDetail.success !== false,
+                      'status-failure': viewRecordDetail.status === 'failed' || viewRecordDetail.success === false
+                    }">
+                      <span v-if="viewRecordDetail.status === 'processing'" class="status-dot"></span>
+                      {{ viewRecordDetail.status === 'processing' ? '处理中' : 
+                         viewRecordDetail.status === 'completed' && viewRecordDetail.success !== false ? '已完成' : '失败' }}
+                    </span>
+                  </div>
+                </div>
+                <div class="expanded-actions">
+                  <el-button @click="deleteRecord(viewRecordDetail.record_id)" type="danger" size="small" class="action-button delete-button">
+                    <el-icon><Delete /></el-icon> 删除记录
+                  </el-button>
+                </div>
+              </div>
+
+              <!-- 主内容区 -->
+              <div class="expanded-main-content">
+                <!-- 左侧：回答和视频 -->
+                <div class="expanded-left-panel">
+                  <!-- 回答卡片 -->
+                  <div class="content-card answer-card">
+                    <div class="card-header">
+                      <h2 class="card-title">
+                        <el-icon><ChatLineRound /></el-icon> AI 回答
+                      </h2>
+                    </div>
+                    <div class="card-body">
+                      <div v-if="viewRecordDetail.status === 'processing'" class="processing-container">
+                        <div class="processing-spinner"></div>
+                        <p class="processing-text">AI 正在分析中，请稍候...</p>
+                      </div>
+                      <div v-else class="answer-content">
+                        {{ viewRecordDetail.model_result?.answer || viewRecordDetail.model_result?.predicted_answer || '无回答' }}
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 相关视频卡片 -->
+                  <div class="content-card videos-card">
+                    <div class="card-header">
+                      <h2 class="card-title">
+                        <el-icon><VideoPlay /></el-icon> 相关视频
+                      </h2>
+                    </div>
+                    <div class="card-body">
+                      <div class="videos-grid">
+                        <div
+                          v-for="(videoPath, index) in viewRecordDetail.video_paths.filter(vp => getVideoNameByPath(vp))"
+                          :key="index"
+                          class="video-item-card"
+                        >
+                          <div class="video-item-icon">
+                            <el-icon><VideoPlay /></el-icon>
+                          </div>
+                          <div class="video-item-name">{{ getVideoNameByPath(videoPath) }}</div>
+                        </div>
+                      </div>
+                      <div v-if="getDeletedVideoCount() > 0" class="deleted-videos-alert">
+                        <el-icon><Warning /></el-icon>
+                        <span>还有 {{ getDeletedVideoCount() }} 个视频已被删除</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 右侧：分析过程 -->
+                <div class="expanded-right-panel">
+                  <div class="content-card process-card">
+                    <div class="card-header">
+                      <h2 class="card-title">
+                        <el-icon><Loading /></el-icon> 分析过程
+                      </h2>
+                    </div>
+                    <div class="card-body">
+                      <div v-if="currentProgress.length === 0" class="empty-process">
+                        <div class="empty-icon">📊</div>
+                        <p>暂无分析过程信息</p>
+                      </div>
+                      <div v-else class="process-timeline">
+                        <div
+                          v-for="(item, index) in currentProgress"
+                          :key="index"
+                          class="process-step"
+                          :class="{
+                            'step-completed': item.status === 'completed',
+                            'step-processing': item.status === 'processing'
+                          }"
+                        >
+                          <div class="step-number">{{ index + 1 }}</div>
+                          <div class="step-content">
+                            <div class="step-header">
+                              <div class="step-stage">{{ item.stage }}</div>
+                              <div class="step-time">{{ new Date(item.timestamp).toLocaleTimeString() }}</div>
+                            </div>
+                            <div class="step-message">{{ item.message }}</div>
+                            <div v-if="item.data && Object.keys(item.data).length" class="step-data">
+                              <pre>{{ JSON.stringify(item.data, null, 2) }}</pre>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -412,7 +538,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { qaApi } from '../api/qa'
 import { videoApi } from '../api/video'
 import { getAuthInfo } from '../api/auth'
-import { VideoPlay, Monitor, FullScreen, Close, ChatLineRound, Download, Upload, Delete, Edit, ArrowLeft } from '@element-plus/icons-vue'
+import { VideoPlay, Monitor, FullScreen, Close, ChatLineRound, Download, Upload, Delete, Edit, ArrowLeft, ArrowRight, Warning, Loading } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const username = ref('用户')
@@ -604,13 +730,24 @@ function stopPolling() {
     pollingInterval = null
   }
 }
+async function refreshTaskProgress(taskId) {
+  try {
+    const res = await qaApi.getTaskProgress(taskId)
+    if (res.data && Array.isArray(res.data.progress)) {
+      taskProgressMap[taskId] = res.data.progress
+    }
+  } catch (error) {
+    console.error('获取任务进度失败:', error)
+  }
+}
 async function checkProcessingTasks() {
   try {
     const res = await qaApi.getRecords({ page: 1, limit: 100 })
     if (res.data) {
-      const processingRecords = res.data.records.filter(r => r.status === 'processing')
-      for (const record of processingRecords) {
-        if (processedTasks.has(record.record_id)) continue
+            const processingRecords = res.data.records.filter(r => r.status === 'processing')
+            for (const record of processingRecords) {
+                await refreshTaskProgress(record.record_id)
+                if (processedTasks.has(record.record_id)) continue
         const statusRes = await qaApi.getRecord(record.record_id)
         const data = statusRes.data
         if (data && (data.status === 'completed' || data.status === 'failed' || data.success !== undefined)) {
@@ -637,9 +774,16 @@ const relatedVideos = ref([])
 const searchQuery = ref('')
 const filterStatus = ref('all')
 const questionInput = ref('')
+const isDetailExpanded = ref(false)
 
 const stats = reactive({ total: 0, success: 0, failure: 0, processing: 0 })
 const records = ref([])
+const taskProgressMap = reactive({})
+const currentProgress = computed(() => {
+  if (!viewRecordDetail.value) return []
+  const id = viewRecordDetail.value.record_id
+  return taskProgressMap[id] || viewRecordDetail.value.model_result?.process_logs?.progress || []
+})
 const currentPage = ref(1)
 const pageSize = 10
 const totalPages = ref(1)
@@ -682,6 +826,14 @@ async function viewRecord(record) {
   if (videoList.value.length === 0) await loadVideos()
   viewRecordDetail.value = record
   relatedVideos.value = record.video_paths || []
+  isDetailExpanded.value = false
+  if (record.status === 'processing') {
+    await refreshTaskProgress(record.record_id)
+  }
+}
+
+function toggleDetailExpand() {
+  isDetailExpanded.value = !isDetailExpanded.value
 }
 async function deleteRecord(recordId) {
   if (!confirm('确定要删除这条问答记录吗？')) return
@@ -939,6 +1091,7 @@ function getDeletedVideoCount() {
   padding: 20px;
   flex: 1;
   overflow: hidden;
+  min-height: 0;
 }
 
 .video-panel,
@@ -1329,7 +1482,36 @@ function getDeletedVideoCount() {
 }
 .page-info { color: var(--text-muted); font-size: 13px; }
 
-.record-detail-panel { display: flex; flex-direction: column; overflow: hidden; height: 100%; }
+.record-detail-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 10;
+}
+
+.record-detail-panel.expanded {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  bottom: 20px;
+  left: 30%; /* 占满右侧大部分屏幕，覆盖到中间的视频部分 */
+  width: auto;
+  max-width: none;
+  z-index: 100;
+  box-shadow: 0 20px 40px color-mix(in srgb, var(--text-main) 20%, transparent);
+}
+
+.record-detail-panel.expanded::before {
+  opacity: 0.4;
+  filter: blur(20px);
+}
+
+.expand-button {
+  flex-shrink: 0;
+}
 .detail-header {
   padding: 20px;
   border-bottom: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent);
@@ -1432,6 +1614,466 @@ function getDeletedVideoCount() {
 .detail-content::-webkit-scrollbar-track {
   background: color-mix(in srgb, var(--primary) 8%, transparent);
   border-radius: 999px;
+}
+
+/* 展开布局样式 */
+.expanded-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* 顶部信息栏 */
+.expanded-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 24px;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
+  color: white;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.expanded-title-section {
+  flex: 1;
+  margin-right: 20px;
+}
+
+.expanded-main-title {
+  margin: 0 0 12px 0;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.expanded-meta-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.expanded-timestamp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.status-indicator.status-processing {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.status-indicator.status-success {
+  background: rgba(34, 197, 94, 0.2);
+  color: #dcfce7;
+}
+
+.status-indicator.status-failure {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fee2e2;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  background: white;
+  border-radius: 50%;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.expanded-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.action-button {
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.action-button:hover {
+  transform: translateY(-2px);
+}
+
+.delete-button {
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+/* 主内容区 */
+.expanded-main-content {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  padding: 24px;
+  background: var(--bg-page);
+  min-height: 0;
+}
+
+/* 面板 */
+.expanded-left-panel,
+.expanded-right-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+  max-height: 100%;
+  min-height: 0;
+}
+
+/* 内容卡片 */
+.content-card {
+  background: var(--bg-card);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border-soft);
+  overflow: hidden;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.content-card .card-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.content-card:hover {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.card-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--bg-card) 80%, var(--primary) 10%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-body {
+  padding: 20px;
+}
+
+/* 处理中状态 */
+.processing-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+}
+
+.processing-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid color-mix(in srgb, var(--primary) 20%, transparent);
+  border-top: 4px solid var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+.processing-text {
+  font-size: 14px;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+/* 回答内容 */
+.answer-content {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-main);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* 视频网格 */
+.videos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.video-item-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--bg-card) 70%, var(--primary) 5%);
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.video-item-card:hover {
+  background: color-mix(in srgb, var(--bg-card) 60%, var(--primary) 10%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+}
+
+.video-item-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  margin-bottom: 12px;
+}
+
+.video-item-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-main);
+  line-height: 1.4;
+}
+
+/* 删除视频警告 */
+.deleted-videos-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  font-size: 13px;
+  color: #dc2626;
+  font-weight: 500;
+}
+
+/* 空过程状态 */
+.empty-process {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.empty-process p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* 过程时间线 */
+.process-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.process-step {
+  display: flex;
+  gap: 16px;
+  position: relative;
+}
+
+.process-step::before {
+  content: '';
+  position: absolute;
+  left: 19px;
+  top: 40px;
+  bottom: -20px;
+  width: 2px;
+  background: var(--border-soft);
+  z-index: 0;
+}
+
+.process-step:last-child::before {
+  display: none;
+}
+
+.step-number {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 2px solid var(--border-soft);
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+  flex-shrink: 0;
+  z-index: 1;
+  transition: all 0.3s ease;
+}
+
+.process-step.step-completed .step-number {
+  background: var(--success);
+  border-color: var(--success);
+  color: white;
+}
+
+.process-step.step-processing .step-number {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: white;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.step-content {
+  flex: 1;
+  background: color-mix(in srgb, var(--bg-card) 80%, transparent);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid var(--border-soft);
+  position: relative;
+  z-index: 1;
+}
+
+.step-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.step-stage {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.step-time {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.step-message {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-main);
+  margin-bottom: 12px;
+}
+
+.step-data {
+  margin-top: 12px;
+  border-top: 1px solid var(--border-soft);
+  padding-top: 12px;
+}
+
+.step-data pre {
+  margin: 0;
+  font-size: 12px;
+  background: color-mix(in srgb, var(--primary) 5%, transparent);
+  color: var(--text-main);
+  overflow-x: auto;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-soft);
+  line-height: 1.4;
+}
+
+/* 滚动条样式 */
+.expanded-left-panel::-webkit-scrollbar,
+.expanded-right-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.expanded-left-panel::-webkit-scrollbar-thumb,
+.expanded-right-panel::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, var(--primary), var(--accent));
+  border-radius: 3px;
+}
+
+.expanded-left-panel::-webkit-scrollbar-track,
+.expanded-right-panel::-webkit-scrollbar-track {
+  background: var(--bg-page);
+  border-radius: 3px;
+}
+
+/* 分析过程 */
+.detail-process {
+  margin-top: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--bg-card);
+  max-height: 250px;
+  overflow: auto;
+}
+.detail-process h3 {
+  margin-bottom: 8px;
+  color: var(--text-main);
+}
+.process-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.process-item {
+  border-bottom: 1px solid var(--border-soft);
+  padding: 6px 0;
+}
+.process-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+.process-message {
+  font-size: 13px;
+  color: var(--text-main);
+  margin-bottom: 4px;
+}
+.process-data pre {
+  margin: 0;
+  font-size: 11px;
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  color: var(--text-main);
+  overflow-x: auto;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-soft);
 }
 
 /* 鼠标点击特效 */

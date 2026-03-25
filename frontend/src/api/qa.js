@@ -123,6 +123,15 @@ export const qaApi = {
       params: { format },
       responseType: 'blob'
     })
+  },
+
+  /**
+   * 获取任务实时进度
+   * @param {string} taskId - 任务 ID
+   * @returns {Promise}
+   */
+  getTaskProgress(taskId) {
+    return api.get(`/qa/task/${taskId}/progress`)
   }
 }
 

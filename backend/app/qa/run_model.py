@@ -17,7 +17,8 @@ from typing import List, Dict, Any
 from mva.agent_runner import AgentRunner
 
 def ask_model(question: str, video_paths: List[str], config_path: str, 
-                                  enable_memory_optimization: bool = True) -> Dict[str, Any]:
+                                  enable_memory_optimization: bool = True, 
+                                  progress_callback=None) -> Dict[str, Any]:
     """
     Analyze multiple videos based on a given question using the multi-video understanding model.
     Passes all videos to the model at once for true multi-video joint analysis and comparison.
@@ -78,7 +79,7 @@ def ask_model(question: str, video_paths: List[str], config_path: str,
         print(f"\n传入模型的视频: {relative_paths}")
         print(f"完整路径: {full_video_paths}")
         print(f"基础目录: {base_dir}")
-        result = agent_runner.run_on_sample(sample, video_base_dir=base_dir)
+        result = agent_runner.run_on_sample(sample, video_base_dir=base_dir, progress_callback=progress_callback)
         
         if result.get("success", True) is False:
             print(f"分析失败: {result.get('error', '未知错误')}")
