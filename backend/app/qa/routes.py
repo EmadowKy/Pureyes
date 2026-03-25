@@ -1,7 +1,7 @@
 # backend/app/qa/routes.py
 """QA 模块的 API 路由 - 支持异步处理"""
 
-from flask import Blueprint, request, jsonify, send_file
+from flask import Blueprint, request, jsonify, send_file, Response
 from flask_jwt_extended import jwt_required, get_jwt, get_jwt_identity
 from .qa_manager import QAManager
 from .run_model import ask_model
@@ -12,6 +12,7 @@ import time
 import threading
 import uuid
 from datetime import datetime
+from queue import Queue
 
 qa_bp = Blueprint('qa', __name__, url_prefix='/api/qa')
 
@@ -20,7 +21,7 @@ config_path = os.path.join(os.path.dirname(__file__), "../../configs/qa_storage.
 qa_manager = QAManager(config_path)
 
 # 存储正在运行的任务（内存存储，重启后清空）
-# 格式：{ task_id: { "username": str, "question": str, "status": str, "created_at": datetime } }
+# 格式：{ task_id: { "username": str, "question": str, "status": str, "created_at": datetime, "progress_queue": Queue } }
 running_tasks = {}
 
 
@@ -61,9 +62,14 @@ def process_question_async(task_id, user_id, username, question, video_paths, co
     try:
         # 初始化任务进度信息
         running_tasks[task_id]['progress'] = []
+        # progress_queue 已在/ask路由中初始化
 
         def progress_callback(item):
             running_tasks[task_id].setdefault('progress', []).append(item)
+            # 同时推送到队列以供SSE实时使用
+            progress_queue = running_tasks[task_id].get('progress_queue')
+            if progress_queue:
+                progress_queue.put(item)
 
         # 调用模型回答问题
         result = ask_model(question, video_paths, config_path, progress_callback=progress_callback)
@@ -180,7 +186,8 @@ def ask():
             'video_paths': video_paths,
             'status': 'processing',
             'created_at': datetime.now().isoformat(),
-            'record_id': task_id
+            'record_id': task_id,
+            'progress_queue': Queue()
         }
         
         # 启动后台线程处理
@@ -234,7 +241,14 @@ def get_task_status(task_id):
         # 合并运行时进度（如果存在）
         progress = running_tasks.get(task_id, {}).get('progress')
         if progress:
-            record = {**record, 'model_result': {**record.get('model_result', {}), 'process_logs': {'progress': progress}}}
+            # 保留原有的 initialization、iterations 等数据，只更新 progress
+            existing_process_logs = record.get('model_result', {}).get('process_logs', {})
+            if 'model_result' not in record:
+                record['model_result'] = {}
+            record['model_result']['process_logs'] = {
+                **existing_process_logs,
+                'progress': progress
+            }
         
         return jsonify({
             "code": 200,
@@ -484,3 +498,61 @@ def get_task_progress(task_id):
 
     except Exception as e:
         return jsonify({"code":500, "msg": f"服务器错误：{str(e)}", "data":None}), 500
+
+
+@qa_bp.route('/task/<task_id>/stream', methods=['GET'])
+def stream_task_progress(task_id):
+    """SSE 流式推送任务进度（支持无认证上流式数据，因浏览器EventSource限制）"""
+    try:
+        # 尝试从JWT获取认证，如果失败则允许继续（SSE需要特殊处理）
+        try:
+            uid = get_jwt_identity()
+        except:
+            uid = None
+        
+        # 如果没有JWT认证，根据task_id判断是否允许访问
+        # 仅允许查看正在进行的任务（不含敏感历史数据）
+        task = running_tasks.get(task_id)
+        if not task:
+            # 尝试从请求参数获取token进行验证（备选方案）
+            token = request.args.get('token')
+            if not token:
+                return jsonify({"error": "任务不存在"}), 404
+
+        def generate():
+            """生成器函数：持续推送进度事件"""
+            progress_queue = task.get('progress_queue')
+            
+            # SSE连接保活信号
+            yield f"data: {json.dumps({'type': 'connected', 'task_id': task_id})}\n\n"
+            
+            # 不断推送新进度
+            while True:
+                # 检查队列中是否有新的进度项
+                while progress_queue and not progress_queue.empty():
+                    try:
+                        item = progress_queue.get_nowait()
+                        yield f"data: {json.dumps({'type': 'progress', 'data': item})}\n\n"
+                    except:
+                        break
+                
+                # 检查任务是否完成
+                if task.get('status') in ['completed', 'failed']:
+                    # 推送完成信号
+                    yield f"data: {json.dumps({'type': 'complete', 'status': task.get('status'), 'result': task.get('result')})}\n\n"
+                    break
+                
+                # 避免繁忙轮询
+                time.sleep(0.1)
+        
+        return Response(generate(), mimetype='text/event-stream', headers={
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Credentials': 'true'
+        })
+
+    except Exception as e:
+        print(f"SSE stream error: {e}")
+        return jsonify({"error": f"服务器错误：{str(e)}"}), 500

@@ -80,6 +80,11 @@
             </div>
           </div>
         </div>
+
+        <!-- 分析过程可视化 -->
+        <div v-if="record.model_result?.process_logs" class="content-section process-section">
+          <ProcessFlow :process-logs="record.model_result.process_logs" />
+        </div>
       </div>
 
       <div class="dialog-footer">
@@ -91,6 +96,7 @@
 
 <script setup>
 import { defineProps, defineEmits } from 'vue'
+import ProcessFlow from './ProcessFlow.vue'
 
 const props = defineProps({
   record: {
@@ -135,7 +141,7 @@ function formatTime(timestamp) {
   background: white;
   border-radius: 12px;
   width: 100%;
-  max-width: 700px;
+  max-width: 900px;
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
@@ -399,5 +405,14 @@ function formatTime(timestamp) {
 .btn-close-dialog:hover {
   border-color: #999;
   color: #333;
+}
+
+/* 分析过程部分 */
+.process-section {
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 24px;
 }
 </style>

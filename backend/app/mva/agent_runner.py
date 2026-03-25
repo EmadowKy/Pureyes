@@ -418,10 +418,29 @@ class AgentRunner:
             v_curr_name = max(active_videos.keys(), key=lambda k: active_videos[k]['priority'])
             v_curr = TextBank['videos'][v_curr_name]
 
+            # 初始化迭代对象（用于逐步填充卡片）
+            iter_log = {
+                'iteration': iteration_count + 1,
+                'selected_video': v_curr_name,
+                'priority_before': v_curr['priority'],
+                'action': None,
+                'new_description_part': None,
+                'full_description': v_curr.get('description', ''),
+                'old_score': v_curr.get('last_score', 0.5),
+                'new_score': None,
+                'acceleration': None,
+                'video_terminated': False,
+                'global_terminated': False
+            }
+
+            # 迭代开始时就发送初始的迭代框架
             _emit_progress('iteration', 'started', f"第 {iteration_count+1} 次主循环开始", {
                 'iteration': iteration_count+1,
                 'selected_video': v_curr_name,
-                'priority': v_curr.get('priority')
+                'priority': v_curr.get('priority'),
+                'priority_before': v_curr['priority'],
+                'current_score': v_curr.get('last_score', 0.5),
+                'iteration_data': iter_log  # 发送初始框架
             })
 
             v_idx = v_curr['idx']
@@ -456,13 +475,21 @@ class AgentRunner:
             )
             ed = time.time()
             
+            # 更新迭代对象的 action 信息
+            iter_log['action'] = {
+                'option': option,
+                'target_start': target_start,
+                'target_end': target_end
+            }
+            
             _emit_progress('iteration', 'tool_decided', f"第 {iteration_count+1} 次主循环工具决策完成", {
                 'iteration': iteration_count+1,
                 'selected_video': v_curr_name,
                 'option': option,
                 'target_start': target_start,
                 'target_end': target_end,
-                'candidate_scores': candidate_scores
+                'candidate_scores': candidate_scores,
+                'iteration_data': iter_log  # 发送带有 action 的更新版本
             })
             
             if self.config['parameters'].get('print_output', False): 
@@ -641,10 +668,13 @@ class AgentRunner:
                 'acceleration': acceleration,
                 'v_term': v_term,
                 'g_term': g_term,
-                'description_snippet': desc_new_part
+                'description_snippet': desc_new_part,
+                'iteration_data': iter_log  # 发送包含分数、描述等完整信息的更新版本
             })
             
+            # 发送最终完整的迭代对象
             _emit_progress('iteration', 'completed', f"第 {iteration_count+1} 次主循环完成", {
+                'iteration_data': iter_log,  # 发送完整的迭代对象
                 'video': v_curr_name,
                 'iteration': iteration_count+1,
                 'status': v_curr['status'],

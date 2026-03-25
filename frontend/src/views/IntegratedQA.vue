@@ -290,33 +290,19 @@
                       </h2>
                     </div>
                     <div class="card-body">
-                      <div v-if="currentProgress.length === 0" class="empty-process">
+                      <div v-if="!viewRecordDetail.model_result?.process_logs && viewRecordDetail.status !== 'processing'" class="empty-process">
                         <div class="empty-icon">📊</div>
                         <p>暂无分析过程信息</p>
                       </div>
-                      <div v-else class="process-timeline">
-                        <div
-                          v-for="(item, index) in currentProgress"
-                          :key="index"
-                          class="process-step"
-                          :class="{
-                            'step-completed': item.status === 'completed',
-                            'step-processing': item.status === 'processing'
-                          }"
-                        >
-                          <div class="step-number">{{ index + 1 }}</div>
-                          <div class="step-content">
-                            <div class="step-header">
-                              <div class="step-stage">{{ item.stage }}</div>
-                              <div class="step-time">{{ new Date(item.timestamp).toLocaleTimeString() }}</div>
-                            </div>
-                            <div class="step-message">{{ item.message }}</div>
-                            <div v-if="item.data && Object.keys(item.data).length" class="step-data">
-                              <pre>{{ JSON.stringify(item.data, null, 2) }}</pre>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                      <!-- 进行中任务显示实时流 -->
+                      <RealtimeStreamProcessFlow 
+                        v-if="viewRecordDetail.status === 'processing'"
+                        :task-id="viewRecordDetail.record_id"
+                        :token="getCurrentToken()"
+                        @complete="handleStreamComplete"
+                      />
+                      <!-- 已完成任务显示完整过程 -->
+                      <ProcessFlow v-else-if="viewRecordDetail.model_result?.process_logs" :process-logs="viewRecordDetail.model_result.process_logs" />
                     </div>
                   </div>
                 </div>
@@ -539,6 +525,8 @@ import { qaApi } from '../api/qa'
 import { videoApi } from '../api/video'
 import { getAuthInfo } from '../api/auth'
 import { VideoPlay, Monitor, FullScreen, Close, ChatLineRound, Download, Upload, Delete, Edit, ArrowLeft, ArrowRight, Warning, Loading } from '@element-plus/icons-vue'
+import ProcessFlow from '../components/qa/ProcessFlow.vue'
+import RealtimeStreamProcessFlow from '../components/qa/RealtimeStreamProcessFlow.vue'
 
 const router = useRouter()
 const username = ref('用户')
@@ -776,6 +764,11 @@ const filterStatus = ref('all')
 const questionInput = ref('')
 const isDetailExpanded = ref(false)
 
+// 获取当前用户token
+function getCurrentToken() {
+  return localStorage.getItem('access_token') || localStorage.getItem('token')
+}
+
 const stats = reactive({ total: 0, success: 0, failure: 0, processing: 0 })
 const records = ref([])
 const taskProgressMap = reactive({})
@@ -859,12 +852,41 @@ async function submitQuestion() {
     await loadStats()
     await loadRecords()
     showNotificationBanner('问题已提交，AI 正在分析中...', 'success')
-    if (result.data && result.data.record_id) processedTasks.delete(result.data.record_id)
+    // 立即展示新提交任务的实时进度
+    if (result.data && result.data.record_id) {
+      setTimeout(() => {
+        const newRecord = records.value.find(r => r.record_id === result.data.record_id)
+        if (newRecord) {
+          viewRecordDetail.value = newRecord
+          isDetailExpanded.value = true
+        }
+      }, 300)
+    }
   } catch (error) {
     console.error('提问失败:', error)
     showNotificationBanner('提问失败：' + error.message, 'error')
   }
 }
+
+// 处理实时流完成
+async function handleStreamComplete(status) {
+  console.log('Stream complete, status:', status)
+  // 等待一下后端完全存储数据
+  await new Promise(resolve => setTimeout(resolve, 500))
+  
+  // 重新获取记录列表和该任务的最新数据
+  await loadStats()
+  await loadRecords()
+  
+  // 更新当前显示的记录（刷新答案和完整过程）
+  if (viewRecordDetail.value) {
+    const updatedRecord = records.value.find(r => r.record_id === viewRecordDetail.value.record_id)
+    if (updatedRecord) {
+      viewRecordDetail.value = updatedRecord
+    }
+  }
+}
+
 async function handleExport() {
   try {
     const res = await qaApi.exportRecords('json')
@@ -1158,9 +1180,9 @@ function getDeletedVideoCount() {
   border-radius: 12px;
   border: 1px solid color-mix(in srgb, var(--text-main) 12%, transparent);
   transition: all .2s ease;
-  background: color-mix(in srgb, var(--bg-card) 80%, #fff 20%);
-  color: var(--text-main);
 }
+
+/* 实时进度面板 */
 .question-input :deep(.el-textarea__inner:focus) {
   border-color: var(--primary);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 14%, transparent);
