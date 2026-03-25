@@ -138,17 +138,22 @@
       <section class="qa-section">
         <!-- 记录详情视图 -->
         <div v-if="viewRecordDetail" class="record-detail-panel" :class="{ 'expanded': isDetailExpanded }">
-          <div class="detail-header">
+          <div class="detail-header" v-if="!isDetailExpanded">
             <el-button @click="() => { viewRecordDetail = null; relatedVideos = []; isDetailExpanded = false }" size="small" class="back-button">
               <el-icon><ArrowLeft /></el-icon> 返回列表
             </el-button>
             <h2><el-icon><ChatLineRound /></el-icon> 问答详情</h2>
-            <el-button @click="toggleDetailExpand" size="small" class="expand-button">
-              <el-icon v-if="isDetailExpanded"><ArrowRight /></el-icon>
-              <el-icon v-else><ArrowLeft /></el-icon>
-              {{ isDetailExpanded ? '收起' : '展开' }}
-            </el-button>
           </div>
+          
+          <!-- 非展开时的悬浮展开按钮 -->
+          <el-button v-if="!isDetailExpanded" @click="toggleDetailExpand" class="floating-expand-button">
+            <el-icon><ArrowLeft /></el-icon>
+          </el-button>
+          
+          <!-- 展开时的悬浮收起按钮 -->
+          <el-button v-if="isDetailExpanded" @click="toggleDetailExpand" class="floating-close-button">
+            <el-icon><ArrowRight /></el-icon>
+          </el-button>
 
           <div class="detail-content" :class="{ 'expanded-content': isDetailExpanded }">
             <!-- 非展开状态的布局 -->
@@ -207,30 +212,6 @@
 
             <!-- 展开状态的全新布局 -->
             <div v-else class="expanded-layout">
-              <!-- 顶部信息栏 -->
-              <div class="expanded-top-bar">
-                <div class="expanded-title-section">
-                  <h1 class="expanded-main-title">{{ viewRecordDetail.question }}</h1>
-                  <div class="expanded-meta-info">
-                    <span class="expanded-timestamp">{{ formatTime(viewRecordDetail.timestamp) }}</span>
-                    <span class="status-indicator" :class="{
-                      'status-processing': viewRecordDetail.status === 'processing',
-                      'status-success': viewRecordDetail.status === 'completed' && viewRecordDetail.success !== false,
-                      'status-failure': viewRecordDetail.status === 'failed' || viewRecordDetail.success === false
-                    }">
-                      <span v-if="viewRecordDetail.status === 'processing'" class="status-dot"></span>
-                      {{ viewRecordDetail.status === 'processing' ? '处理中' : 
-                         viewRecordDetail.status === 'completed' && viewRecordDetail.success !== false ? '已完成' : '失败' }}
-                    </span>
-                  </div>
-                </div>
-                <div class="expanded-actions">
-                  <el-button @click="deleteRecord(viewRecordDetail.record_id)" type="danger" size="small" class="action-button delete-button">
-                    <el-icon><Delete /></el-icon> 删除记录
-                  </el-button>
-                </div>
-              </div>
-
               <!-- 主内容区 -->
               <div class="expanded-main-content">
                 <!-- 左侧：回答和视频 -->
@@ -744,8 +725,6 @@ async function checkProcessingTasks() {
           await loadStats()
           if (data.status === 'completed' || data.success === true) {
             showNotificationBanner(`"${truncateAnswer(data.question, 30)}" 已完成！`, 'success')
-          } else {
-            showNotificationBanner(`"${truncateAnswer(data.question, 30)}" 处理失败`, 'error')
           }
         }
       }
@@ -864,7 +843,6 @@ async function submitQuestion() {
     }
   } catch (error) {
     console.error('提问失败:', error)
-    showNotificationBanner('提问失败：' + error.message, 'error')
   }
 }
 
@@ -1515,15 +1493,16 @@ function getDeletedVideoCount() {
 }
 
 .record-detail-panel.expanded {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  bottom: 20px;
-  left: 30%; /* 占满右侧大部分屏幕，覆盖到中间的视频部分 */
-  width: auto;
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
   max-width: none;
   z-index: 100;
-  box-shadow: 0 20px 40px color-mix(in srgb, var(--text-main) 20%, transparent);
+  box-shadow: none;
 }
 
 .record-detail-panel.expanded::before {
@@ -1534,6 +1513,39 @@ function getDeletedVideoCount() {
 .expand-button {
   flex-shrink: 0;
 }
+
+.floating-expand-button {
+  position: fixed !important;
+  left: calc(100% - 410px) !important;
+  top: 50% !important;
+  transform: translateY(-50%);
+  z-index: 50 !important;
+  width: 50px !important;
+  height: 50px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%) !important;
+  border: none !important;
+  color: white !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: all 0.3s ease !important;
+}
+
+.floating-expand-button:hover {
+  transform: translateY(-50%) scale(1.1) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+.floating-expand-button svg {
+  font-size: 24px;
+}
+
+
+
 .detail-header {
   padding: 20px;
   border-bottom: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent);
@@ -1541,7 +1553,65 @@ function getDeletedVideoCount() {
   align-items: center;
   gap: 16px;
   background: color-mix(in srgb, var(--bg-card) 72%, #eef2ff 28%);
+  position: relative;
+  z-index: 101;
 }
+
+.expanded-header {
+  padding: 20px;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  background: white;
+  position: relative;
+  z-index: 9999;
+  min-height: 60px;
+  border-bottom: 1px solid #eee;
+}
+
+.expanded-header .expand-button {
+  border-radius: 8px;
+  font-weight: 500;
+  background: white;
+  border: 1px solid #ddd;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.expanded-header .expand-button:hover {
+  background: #f5f5f5;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.floating-close-button {
+  position: fixed !important;
+  left: 20px !important;
+  top: 50% !important;
+  transform: translateY(-50%);
+  z-index: 10000 !important;
+  width: 50px !important;
+  height: 50px !important;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%) !important;
+  border: none !important;
+  color: white !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: all 0.3s ease !important;
+}
+
+.floating-close-button:hover {
+  transform: translateY(-50%) scale(1.1) !important;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+.floating-close-button svg {
+  font-size: 24px;
+}
+
 .back-button { flex-shrink: 0; }
 .detail-header h2 {
   margin: 0;
@@ -1644,6 +1714,26 @@ function getDeletedVideoCount() {
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  position: relative;
+}
+
+.expanded-layout > .expand-close-button {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 102;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.expanded-layout > .expand-close-button:hover {
+  background: #f5f5f5;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 /* 顶部信息栏 */
@@ -1740,7 +1830,7 @@ function getDeletedVideoCount() {
 .expanded-main-content {
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 3fr 7fr;
   gap: 20px;
   padding: 24px;
   background: var(--bg-page);
