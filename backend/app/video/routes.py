@@ -20,7 +20,7 @@ def serve_video(video_path):
     GET /api/video/<path>
     
     Args:
-        video_path: 视频的相对路径，例如 'example/1.mp4'
+        video_path: 视频的相对路径，例如 'uploads/video_id.mp4'
     
     Returns:
         视频文件
@@ -28,9 +28,12 @@ def serve_video(video_path):
     try:
         # 构建完整的文件路径
         full_path = os.path.join(backend_root, video_path)
+        # 获取绝对路径并进行规范化
+        full_path = os.path.abspath(full_path)
         
         # 安全检查：确保路径在backend根目录内
-        if not os.path.abspath(full_path).startswith(backend_root):
+        if not full_path.startswith(os.path.abspath(backend_root) + os.sep) and \
+           full_path != os.path.abspath(backend_root):
             abort(403, description="Access denied")
         
         # 打印路径信息用于调试

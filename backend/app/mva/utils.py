@@ -3,6 +3,10 @@
 import base64
 import cv2
 import os
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+# os.environ["HF_HUB_OFFLINE"] = "1"
+# os.environ["TRANSFORMERS_OFFLINE"] = "1"
+
 from functools import lru_cache
 
 from transformers import Qwen3VLForConditionalGeneration, Qwen2_5_VLForConditionalGeneration, AutoProcessor, set_seed

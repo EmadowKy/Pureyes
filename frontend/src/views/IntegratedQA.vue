@@ -612,8 +612,19 @@ async function loadVideos() {
   }
 }
 function getVideoUrl(videoPath) {
-  const filename = videoPath.split('/').pop()
-  return `/api/video/uploads/${filename}`
+  // 支持两种格式：
+  // 1. 相对路径：uploads/video_id.mp4 -> /api/video/uploads/video_id.mp4
+  // 2. 绝对路径：/path/to/backend/uploads/video_id.mp4 -> /api/video/uploads/video_id.mp4
+  if (!videoPath) return '';
+  
+  if (videoPath.startsWith('uploads/')) {
+    // 已经是相对路径，直接转换为API路径
+    return `/api/video/${videoPath}`
+  } else {
+    // 绝对路径，提取文件名
+    const filename = videoPath.split('/').pop()
+    return `/api/video/uploads/${filename}`
+  }
 }
 function handleFileChange(file) {
   if (file) {

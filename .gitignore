@@ -37,3 +37,5 @@ output/**/*.json
 
 # 前端构建产物
 frontend/dist/
+
+*.zip

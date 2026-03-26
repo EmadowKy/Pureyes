@@ -191,7 +191,7 @@ class QAManager:
         Args:
             username (str): Username for record organization
             question (str): The question to ask about the videos
-            video_paths (List[str]): List of absolute paths to video files
+            video_paths (List[str]): List of relative paths to video files (e.g., 'uploads/video_id.mp4')
             config_path (str): Path to model configuration YAML
             enable_memory_optimization (bool): Enable GPU memory optimization
         
