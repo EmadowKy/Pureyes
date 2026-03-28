@@ -142,8 +142,8 @@ export const qaApi = {
    * @param {Function} onError - 错误回调函数
    * @returns {EventSource} - 返回 EventSource 对象，可以通过 .close() 关闭连接
    */
-  subscribeTaskProgress(taskId, onProgress, onComplete, onError) {
-    const token = localStorage.getItem('access_token') || localStorage.getItem('token')
+  subscribeTaskProgress(taskId, onProgress, onComplete, onError, tokenOverride = '') {
+    const token = tokenOverride || localStorage.getItem('access_token') || localStorage.getItem('token')
     const url = `/api/qa/task/${taskId}/stream${token ? '?token=' + encodeURIComponent(token) : ''}`
     
     const eventSource = new EventSource(url)

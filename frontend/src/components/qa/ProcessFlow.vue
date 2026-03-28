@@ -83,7 +83,12 @@
         <div class="phase-description">{{ iterationCount }} 次智能采样与评分</div>
 
         <div class="iterations-timeline">
-          <div class="iteration-card" v-for="(iter, idx) in groupedIterations" :key="'i' + idx">
+          <div
+            class="iteration-card"
+            :class="{ loading: !isIterationCompleted(iter) }"
+            v-for="(iter, idx) in groupedIterations"
+            :key="'i' + idx"
+          >
             <!-- 迭代头 -->
             <div class="iteration-header">
               <div class="iteration-number">{{ idx + 1 }}</div>
@@ -122,16 +127,16 @@
                 <div class="score-comparison">
                   <div class="score-box before">
                     <div class="score-label">迭代前</div>
-                    <div class="score-num">{{ (iter.old_score || 0).toFixed(2) }}</div>
+                    <div class="score-num">{{ formatNumber(iter.old_score) }}</div>
                   </div>
                   <div class="score-arrow">→</div>
                   <div class="score-box after">
                     <div class="score-label">迭代后</div>
-                    <div class="score-num">{{ (iter.new_score || 0).toFixed(2) }}</div>
+                    <div class="score-num">{{ formatNumber(iter.new_score) }}</div>
                   </div>
                   <div class="acceleration-box" :class="{ positive: iter.acceleration > 0 }">
                     <div class="accel-label">加速度</div>
-                    <div class="accel-num">{{ (iter.acceleration || 0).toFixed(2) }}</div>
+                    <div class="accel-num">{{ formatNumber(iter.acceleration) }}</div>
                   </div>
                 </div>
               </div>
@@ -142,11 +147,11 @@
                 <div class="priority-comparison">
                   <div class="priority-item">
                     <span class="label">迭代前:</span>
-                    <span class="value">{{ (iter.priority_before || 0).toFixed(2) }}</span>
+                    <span class="value">{{ formatNumber(iter.priority_before) }}</span>
                   </div>
                   <div class="priority-item">
                     <span class="label">迭代后:</span>
-                    <span class="value">{{ (iter.priority_after || 0).toFixed(2) }}</span>
+                    <span class="value">{{ formatNumber(iter.priority_after) }}</span>
                   </div>
                 </div>
               </div>
@@ -162,46 +167,58 @@
                 <div class="section-title">完整描述</div>
                 <div class="description-box full-desc">{{ iter.full_description }}</div>
               </div>
+
+              <div v-if="!isIterationCompleted(iter)" class="iteration-loading">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">模型推理中，结果生成后将自动更新</div>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       <!-- 最终化阶段 -->
-      <div class="flow-section" v-if="finalizationLogs.length > 0 || processLogs.final_descriptions">
+      <div class="flow-section" v-if="finalSectionVisible">
         <div class="phase-title">最终化阶段</div>
         <div class="phase-description">生成最终答案</div>
 
-        <!-- 最终描述 -->
-        <div class="final-section" v-if="processLogs.final_descriptions || processLogs.final_descriptions_str">
-          <div class="final-title">最终分析结果</div>
-          <div class="final-descriptions-box">
-            <div v-if="processLogs.final_descriptions_str">
-              {{ processLogs.final_descriptions_str }}
-            </div>
-            <div v-else-if="processLogs.final_descriptions">
-              <div v-for="(desc, idx) in processLogs.final_descriptions" :key="'d' + idx" class="final-desc-line">
-                <span class="desc-number">{{ idx + 1 }}.</span>
-                <span class="desc-text">{{ desc }}</span>
+        <div v-if="showFinalSkeleton" class="final-loading">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">模型正在生成最终答案...</div>
+        </div>
+
+        <template v-else>
+          <!-- 最终描述 -->
+          <div class="final-section" v-if="processLogs.final_descriptions || processLogs.final_descriptions_str">
+            <div class="final-title">最终分析结果</div>
+            <div class="final-descriptions-box">
+              <div v-if="processLogs.final_descriptions_str">
+                {{ processLogs.final_descriptions_str }}
+              </div>
+              <div v-else-if="processLogs.final_descriptions">
+                <div v-for="(desc, idx) in processLogs.final_descriptions" :key="'d' + idx" class="final-desc-line">
+                  <span class="desc-number">{{ idx + 1 }}.</span>
+                  <span class="desc-text">{{ desc }}</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <!-- 最终帧 -->
-        <div class="final-section" v-if="processLogs.final_frame_paths && processLogs.final_frame_paths.length > 0">
-          <div class="final-title">最终帧数据</div>
-          <div class="final-frames-box">
-            <div class="frame-row" v-for="(frame, idx) in processLogs.final_frame_paths" :key="'pf' + idx">
-              <span class="frame-index">帧 {{ idx + 1 }}</span>
-              <span class="frame-path">{{ frame }}</span>
+          <!-- 最终帧 -->
+          <div class="final-section" v-if="processLogs.final_frame_paths && processLogs.final_frame_paths.length > 0">
+            <div class="final-title">最终帧数据</div>
+            <div class="final-frames-box">
+              <div class="frame-row" v-for="(frame, idx) in processLogs.final_frame_paths" :key="'pf' + idx">
+                <span class="frame-index">帧 {{ idx + 1 }}</span>
+                <span class="frame-path">{{ frame }}</span>
+              </div>
             </div>
           </div>
-        </div>
+        </template>
       </div>
 
       <!-- 空状态 -->
-      <div class="empty-state" v-if="!hasInitialization && iterationCount === 0 && finalizationLogs.length === 0">
+      <div class="empty-state" v-if="!hasInitialization && iterationCount === 0 && finalizationLogs.length === 0 && (!processLogs.progress || processLogs.progress.length === 0)">
         <div class="empty-text">暂无分析过程数据</div>
       </div>
     </div>
@@ -214,17 +231,28 @@ import { defineProps, ref, computed } from 'vue'
 const props = defineProps({
   processLogs: {
     type: Object,
-    default: null
+    default: () => ({
+      initialization: [],
+      iterations: [],
+      progress: [],
+      final_descriptions: [],
+      final_descriptions_str: '',
+      final_frame_paths: []
+    })
+  },
+  showFinalSkeleton: {
+    type: Boolean,
+    default: false
   }
 })
 
 // Computed
 const hasInitialization = computed(() => {
-  return props.processLogs?.initialization && props.processLogs.initialization.length > 0
+  return Array.isArray(props.processLogs?.initialization) && props.processLogs.initialization.length > 0
 })
 
 const iterationCount = computed(() => {
-  return props.processLogs?.iterations?.length || 0
+  return Array.isArray(props.processLogs?.iterations) ? props.processLogs.iterations.length : 0
 })
 
 const uniqueStages = computed(() => {
@@ -245,6 +273,10 @@ const finalizationLogs = computed(() => {
   return filterLogsByStage('finalization').concat(filterLogsByStage('answering'))
 })
 
+const finalSectionVisible = computed(() => {
+  return props.showFinalSkeleton || finalizationLogs.value.length > 0 || !!props.processLogs?.final_descriptions || !!props.processLogs?.final_descriptions_str || (props.processLogs?.final_frame_paths && props.processLogs.final_frame_paths.length > 0)
+})
+
 const groupedIterations = computed(() => {
   return props.processLogs?.iterations || []
 })
@@ -257,6 +289,11 @@ function filterLogsByStage(stage) {
 function formatTime(val) {
   if (typeof val === 'number') return val.toFixed(1)
   return String(val)
+}
+
+function formatNumber(val, digits = 2) {
+  if (val === null || val === undefined || Number.isNaN(Number(val))) return '—'
+  return Number(val).toFixed(digits)
 }
 
 function isIterationCompleted(iter) {
@@ -498,6 +535,10 @@ function isIterationCompleted(iter) {
   border-color: var(--primary);
 }
 
+.iteration-card.loading {
+  border-style: dashed;
+}
+
 .iteration-header {
   padding: 14px;
   background: var(--bg-card);
@@ -726,6 +767,31 @@ function isIterationCompleted(iter) {
   border-radius: 2px;
 }
 
+.iteration-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--text-muted);
+}
+
+.loading-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 3px solid color-mix(in srgb, var(--primary) 25%, transparent);
+  border-top-color: var(--primary);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* ==================== Final ==================== */
 .final-section {
   margin-top: 20px;
@@ -775,6 +841,16 @@ function isIterationCompleted(iter) {
   border-radius: 8px;
   border-left: 4px solid var(--success);
   overflow: hidden;
+}
+
+.final-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--text-muted);
 }
 
 .frame-row {
