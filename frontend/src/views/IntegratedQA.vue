@@ -1103,6 +1103,8 @@ function getDeletedVideoCount() {
   flex: 1;
   overflow: hidden;
   min-height: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .video-panel,
@@ -1143,6 +1145,7 @@ function getDeletedVideoCount() {
 
 .video-panel { display: flex; flex-direction: column; overflow: hidden; }
 .qa-section { display: flex; flex-direction: column; gap: 20px; overflow: hidden; }
+.qa-section > div { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .question-panel { flex-shrink: 0; }
 
 .question-card { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
@@ -1184,7 +1187,7 @@ function getDeletedVideoCount() {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  max-height: calc(100vh - 480px);
+  min-height: 0;
 }
 
 .panel-header {

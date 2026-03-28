@@ -71,7 +71,7 @@ body {
 body::before {
   content: "";
   position: fixed;
-  inset: -20%;
+  inset: 0;
   pointer-events: none;
   background:
     radial-gradient(circle at 20% 30%, color-mix(in srgb, var(--primary) 30%, transparent) 0 2px, transparent 3px),
