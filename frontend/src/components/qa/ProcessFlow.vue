@@ -24,6 +24,7 @@
       <div class="flow-section" v-if="hasInitialization">
         <div class="phase-title">初始化阶段</div>
         <div class="phase-description">模型初始化与初始采样</div>
+        <div class="phase-hint" v-if="isInitializationInProgress">正在初始化...</div>
 
         <div class="videos-grid">
           <div class="video-card" v-for="(video, idx) in processLogs.initialization" :key="'v' + idx">
@@ -218,7 +219,7 @@
       </div>
 
       <!-- 空状态 -->
-      <div class="empty-state" v-if="!hasInitialization && iterationCount === 0 && finalizationLogs.length === 0 && (!processLogs.progress || processLogs.progress.length === 0)">
+      <div class="empty-state" v-if="!hasInitialization && iterationCount === 0 && finalizationLogs.length === 0">
         <div class="empty-text">暂无分析过程数据</div>
       </div>
     </div>
@@ -231,14 +232,7 @@ import { defineProps, ref, computed } from 'vue'
 const props = defineProps({
   processLogs: {
     type: Object,
-    default: () => ({
-      initialization: [],
-      iterations: [],
-      progress: [],
-      final_descriptions: [],
-      final_descriptions_str: '',
-      final_frame_paths: []
-    })
+    default: null
   },
   showFinalSkeleton: {
     type: Boolean,
@@ -248,17 +242,23 @@ const props = defineProps({
 
 // Computed
 const hasInitialization = computed(() => {
-  return Array.isArray(props.processLogs?.initialization) && props.processLogs.initialization.length > 0
+  const hasInitLogs = props.processLogs?.initialization && props.processLogs.initialization.length > 0
+  return hasInitLogs || iterationCount.value === 0
 })
 
 const iterationCount = computed(() => {
-  return Array.isArray(props.processLogs?.iterations) ? props.processLogs.iterations.length : 0
+  return props.processLogs?.iterations?.length || 0
 })
 
 const uniqueStages = computed(() => {
   if (!props.processLogs?.progress) return []
   const stages = new Set(props.processLogs.progress.map(log => log.stage))
   return Array.from(stages)
+})
+
+const isInitializationInProgress = computed(() => {
+  const hasInitStage = props.processLogs?.progress?.some(log => log.stage === 'initialization')
+  return iterationCount.value === 0 && (hasInitStage || hasInitialization.value)
 })
 
 const totalDuration = computed(() => {
@@ -386,6 +386,19 @@ function isIterationCompleted(iter) {
   font-size: 14px;
   color: var(--text-muted);
   margin-bottom: 20px;
+}
+
+.phase-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 14px;
 }
 
 /* ==================== Videos Grid ==================== */
