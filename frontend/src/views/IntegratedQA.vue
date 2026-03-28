@@ -451,9 +451,6 @@
           <el-form-item label="视频文件">
             <el-upload class="upload-demo" action="" :auto-upload="false" :on-change="handleFileChange" :show-file-list="false">
               <el-button size="small" type="primary">选择文件</el-button>
-              <template #tip>
-                <div class="el-upload__tip">请选择 MP4 格式的视频文件</div>
-              </template>
             </el-upload>
             <div v-if="uploadVideoFile" class="file-info">已选择: {{ uploadVideoFile.name }}</div>
           </el-form-item>
@@ -629,6 +626,11 @@ function getVideoUrl(videoPath) {
 }
 function handleFileChange(file) {
   if (file) {
+    const fileType = file.raw.type
+    if (!fileType.startsWith('video/')) {
+      ElMessage.error('只能上传视频文件')
+      return
+    }
     uploadVideoFile.value = file.raw
     if (!uploadVideoName.value) uploadVideoName.value = file.name.replace(/\.[^/.]+$/, "")
   }

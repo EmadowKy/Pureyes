@@ -60,6 +60,10 @@ def upload_video():
         return fail(code=400, msg="缺少视频名称")
     if not video_file:
         return fail(code=400, msg="缺少视频文件")
+    
+    # 验证文件类型
+    if not video_file.mimetype.startswith('video/'):
+        return fail(code=400, msg="只能上传视频文件")
 
     try:
         video_id = str(uuid.uuid4()).replace("-", "")[:32]
