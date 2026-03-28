@@ -1,68 +1,76 @@
 <template>
   <div class="process-flow">
-    <!-- Timeline 标题和汇总 -->
-    <div class="timeline-header">
-      <h3 class="timeline-title">分析过程</h3>
-      <div class="timeline-summary" v-if="processLogs">
-        <span class="summary-item">
-          <span class="summary-label">总耗时：</span>
-          <span class="summary-value">{{ totalDuration }}s</span>
-        </span>
-        <span class="summary-item">
-          <span class="summary-label">迭代次数：</span>
-          <span class="summary-value">{{ iterationCount }}</span>
-        </span>
-        <span class="summary-item">
-          <span class="summary-label">阶段数：</span>
-          <span class="summary-value">{{ uniqueStages.length }}</span>
-        </span>
+    <!-- ==================== Header ====================  -->
+    <div class="flow-header">
+      <div class="header-content">
+        <h2 class="header-title">智能分析过程</h2>
+        <div class="header-stats">
+          <div class="stat">
+            <span class="stat-text">耗时: {{ totalDuration }}s</span>
+          </div>
+          <div class="stat">
+            <span class="stat-text">迭代: {{ iterationCount }} 次</span>
+          </div>
+          <div class="stat">
+            <span class="stat-text">阶段: {{ uniqueStages.length }}</span>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Timeline 主体 -->
-    <div class="timeline">
+    <!-- ==================== Content ====================  -->
+    <div class="content-flow">
       <!-- 初始化阶段 -->
-      <div class="timeline-stage" v-if="hasInitialization">
-        <div class="stage-header">
-          <div class="stage-icon initialization">⚙️</div>
-          <div class="stage-content">
-            <div class="stage-title">初始化阶段</div>
-            <div class="stage-subtitle">模型初始化与初始采样</div>
-          </div>
-        </div>
-        
-        <div class="stage-body" v-if="expandedStages.initialization">
-          <!-- 初始化视频 -->
-          <div class="init-videos" v-if="processLogs.initialization">
-            <div class="init-video" v-for="(video, idx) in processLogs.initialization" :key="idx">
-              <div class="video-name">{{ video.video }}</div>
-              <div class="video-details">
-                <div class="detail-item">
-                  <span class="detail-label">初始描述:</span>
-                  <span class="detail-value">{{ video.initial_description }}</span>
-                </div>
-                <div class="detail-item">
-                  <span class="detail-label">初始分数:</span>
-                  <span class="detail-value score">{{ video.score.toFixed(2) }}</span>
-                </div>
-                <div class="detail-item">
-                  <span class="detail-label">优先级:</span>
-                  <span class="detail-value">{{ video.priority.toFixed(2) }}</span>
-                </div>
+      <div class="flow-section" v-if="hasInitialization">
+        <div class="phase-title">初始化阶段</div>
+        <div class="phase-description">模型初始化与初始采样</div>
+
+        <div class="videos-grid">
+          <div class="video-card" v-for="(video, idx) in processLogs.initialization" :key="'v' + idx">
+            <div class="card-header">
+              <div class="video-header">
+                <span class="video-name">{{ video.video }}</span>
               </div>
             </div>
-          </div>
 
-          <!-- 初始化日志 -->
-          <div class="logs-group">
-            <div class="log-item" v-for="(log, idx) in initializationLogs" :key="'init-' + idx">
-              <div class="log-timestamp">{{ formatTime(log.timestamp) }}</div>
-              <div class="log-badge" :class="log.status">{{ log.status }}</div>
-              <div class="log-message">{{ log.message }}</div>
-              <div class="log-data" v-if="Object.keys(log.data).length > 0">
-                <span v-for="(val, key) in log.data" :key="key" class="data-tag">
-                  {{ key }}: {{ val }}
-                </span>
+            <div class="card-body">
+              <!-- 描述 -->
+              <div class="description-section">
+                <div class="section-title">初始描述</div>
+                <div class="description-content">{{ video.initial_description }}</div>
+              </div>
+
+              <!-- 关键指标 -->
+              <div class="metrics">
+                <div class="metric">
+                  <div class="metric-label">初始分数</div>
+                  <div class="metric-value">{{ video.score.toFixed(2) }}</div>
+                </div>
+                <div class="metric">
+                  <div class="metric-label">优先级</div>
+                  <div class="metric-value">{{ video.priority.toFixed(2) }}</div>
+                </div>
+                <div class="metric" v-if="video.frame_bank_size !== undefined">
+                  <div class="metric-label">帧库大小</div>
+                  <div class="metric-value">{{ video.frame_bank_size }}</div>
+                </div>
+                <div class="metric" v-if="video.acceleration">
+                  <div class="metric-label">加速度</div>
+                  <div class="metric-value">{{ video.acceleration.toFixed(2) }}</div>
+                </div>
+              </div>
+
+              <!-- 帧库信息 -->
+              <div class="frames-info" v-if="video.frame_bank && video.frame_bank.length > 0">
+                <div class="info-label">帧库 ({{ video.frame_bank.length }} 帧)</div>
+                <div class="frames-list">
+                  <div class="frame-item" v-for="(frame, fidx) in video.frame_bank.slice(0, 3)" :key="'f' + fidx">
+                    {{ frame }}
+                  </div>
+                  <div class="frame-item more" v-if="video.frame_bank.length > 3">
+                    +{{ video.frame_bank.length - 3 }} 更多...
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -70,116 +78,89 @@
       </div>
 
       <!-- 迭代阶段 -->
-      <div class="timeline-stage" v-if="iterationLogs.length > 0">
-        <div class="stage-header">
-          <div class="stage-icon iteration">🔄</div>
-          <div class="stage-content">
-            <div class="stage-title">主循环 ({{ iterationCount }} 次迭代)</div>
-            <div class="stage-subtitle">智能采样与评分循环</div>
-          </div>
-        </div>
+      <div class="flow-section" v-if="iterationCount > 0">
+        <div class="phase-title">主循环迭代</div>
+        <div class="phase-description">{{ iterationCount }} 次智能采样与评分</div>
 
-        <div class="stage-body" v-if="expandedStages.iterations">
-          <!-- 每个迭代 -->
-          <div class="iteration-list">
-            <div 
-              class="iteration-item" 
-              v-for="(iter, idx) in groupedIterations"
-              :key="'iter-' + idx"
-            >
-              <div class="iteration-header">
-                <div class="iteration-number">{{ iter.iteration }}</div>
-                <div class="iteration-info">
-                  <span class="info-item">
-                    选中视频: <strong>{{ iter.selected_video }}</strong>
-                  </span>
-                  <span class="info-item" v-if="iter.action">
-                    采样位置: <strong>{{ iter.action.target_start.toFixed(1) }}s - {{ iter.action.target_end.toFixed(1) }}s</strong>
-                  </span>
+        <div class="iterations-timeline">
+          <div class="iteration-card" v-for="(iter, idx) in groupedIterations" :key="'i' + idx">
+            <!-- 迭代头 -->
+            <div class="iteration-header">
+              <div class="iteration-number">{{ idx + 1 }}</div>
+              <div class="iteration-video">视频: <strong>{{ iter.selected_video }}</strong></div>
+              <div class="iteration-status">
+                <span class="status-badge" v-if="iter.global_terminated">全局终止</span>
+                <span class="status-badge" v-else-if="iter.video_terminated">视频终止</span>
+                <span class="status-badge completed" v-else-if="isIterationCompleted(iter)">已完成</span>
+                <span class="status-badge active" v-else>进行中</span>
+              </div>
+            </div>
+
+            <!-- 迭代内容 -->
+            <div class="iteration-body">
+              <!-- 采样信息 -->
+              <div class="iteration-section" v-if="iter.action">
+                <div class="section-title">采样位置</div>
+                <div class="sampling-box">
+                  <div class="time-info">
+                    <span class="time">{{ formatTime(iter.action.target_start) }}s</span>
+                    <span class="arrow">→</span>
+                    <span class="time">{{ formatTime(iter.action.target_end) }}s</span>
+                  </div>
+                  <div class="sampling-details">
+                    <div class="detail">选项: <strong>{{ iter.action.option }}</strong></div>
+                    <div class="detail" v-if="iter.action.description">
+                      描述: {{ iter.action.description }}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <!-- 迭代详情 -->
-              <div class="iteration-details" v-if="expandedIterations[idx]">
-                <!-- 决策信息 -->
-                <div class="iteration-section">
-                  <div class="section-label">🎯 工具决策</div>
-                  <div class="section-content">
-                    <div class="param-row" v-if="iter.action">
-                      <span class="param-name">采样选项:</span>
-                      <span class="param-value">{{ iter.action.option }}</span>
-                    </div>
-                    <div class="param-row" v-if="iter.priority_before">
-                      <span class="param-name">迭代前优先级:</span>
-                      <span class="param-value">{{ iter.priority_before.toFixed(2) }}</span>
-                    </div>
+              <!-- 分数对比 -->
+              <div class="iteration-section">
+                <div class="section-title">分数变化</div>
+                <div class="score-comparison">
+                  <div class="score-box before">
+                    <div class="score-label">迭代前</div>
+                    <div class="score-num">{{ (iter.old_score || 0).toFixed(2) }}</div>
+                  </div>
+                  <div class="score-arrow">→</div>
+                  <div class="score-box after">
+                    <div class="score-label">迭代后</div>
+                    <div class="score-num">{{ (iter.new_score || 0).toFixed(2) }}</div>
+                  </div>
+                  <div class="acceleration-box" :class="{ positive: iter.acceleration > 0 }">
+                    <div class="accel-label">加速度</div>
+                    <div class="accel-num">{{ (iter.acceleration || 0).toFixed(2) }}</div>
                   </div>
                 </div>
+              </div>
 
-                <!-- 分数变化 -->
-                <div class="iteration-section">
-                  <div class="section-label">📊 分数变化</div>
-                  <div class="section-content">
-                    <div class="score-change">
-                      <div class="score-item">
-                        <span class="score-label">迭代前分数:</span>
-                        <span class="score-value old">{{ iter.old_score?.toFixed(2) || 'N/A' }}</span>
-                      </div>
-                      <div class="score-arrow">→</div>
-                      <div class="score-item">
-                        <span class="score-label">迭代后分数:</span>
-                        <span class="score-value new">{{ iter.new_score?.toFixed(2) || 'N/A' }}</span>
-                      </div>
-                    </div>
-                    <div class="acceleration-info">
-                      <span class="accel-label">加速度:</span>
-                      <span class="accel-value" :class="{ positive: iter.acceleration > 0, neutral: iter.acceleration === 0 }">
-                        {{ (iter.acceleration || 0).toFixed(2) }}
-                      </span>
-                    </div>
+              <!-- 优先级变化 -->
+              <div class="iteration-section">
+                <div class="section-title">优先级</div>
+                <div class="priority-comparison">
+                  <div class="priority-item">
+                    <span class="label">迭代前:</span>
+                    <span class="value">{{ (iter.priority_before || 0).toFixed(2) }}</span>
+                  </div>
+                  <div class="priority-item">
+                    <span class="label">迭代后:</span>
+                    <span class="value">{{ (iter.priority_after || 0).toFixed(2) }}</span>
                   </div>
                 </div>
+              </div>
 
-                <!-- 新增描述 -->
-                <div class="iteration-section" v-if="iter.new_description_part">
-                  <div class="section-label">📝 新增描述</div>
-                  <div class="description-box">{{ iter.new_description_part }}</div>
-                </div>
+              <!-- 新增描述 -->
+              <div class="iteration-section" v-if="iter.new_description_part">
+                <div class="section-title">新增描述</div>
+                <div class="description-box">{{ iter.new_description_part }}</div>
+              </div>
 
-                <!-- 完整描述 -->
-                <div class="iteration-section" v-if="iter.full_description">
-                  <div class="section-label">📋 完整描述</div>
-                  <div class="description-box full">{{ iter.full_description }}</div>
-                </div>
-
-                <!-- 终止状态 -->
-                <div class="iteration-section" v-if="iter.video_terminated !== undefined">
-                  <div class="section-label">🛑 状态标志</div>
-                  <div class="section-content">
-                    <div class="status-flag" :class="{ terminated: iter.video_terminated }">
-                      <span v-if="iter.video_terminated" class="flag-icon">●</span>
-                      <span v-else class="flag-icon">○</span>
-                      <span class="flag-text">视频 {{ iter.video_terminated ? '已' : '未' }}终止</span>
-                    </div>
-                    <div class="status-flag" :class="{ terminated: iter.global_terminated }">
-                      <span v-if="iter.global_terminated" class="flag-icon">●</span>
-                      <span v-else class="flag-icon">○</span>
-                      <span class="flag-text">全局 {{ iter.global_terminated ? '已' : '未' }}终止</span>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 该迭代的处理日志 -->
-                <div class="iteration-section" v-if="iterationProgressLogs[idx] && iterationProgressLogs[idx].length > 0">
-                  <div class="section-label">📌 处理步骤</div>
-                  <div class="logs-group">
-                    <div class="log-item" v-for="(log, lidx) in iterationProgressLogs[idx]" :key="'iter-log-' + lidx">
-                      <div class="log-timestamp">{{ formatTime(log.timestamp) }}</div>
-                      <div class="log-badge" :class="log.status">{{ log.status }}</div>
-                      <div class="log-message">{{ log.message }}</div>
-                    </div>
-                  </div>
-                </div>
+              <!-- 完整描述 -->
+              <div class="iteration-section" v-if="iter.full_description">
+                <div class="section-title">完整描述</div>
+                <div class="description-box full-desc">{{ iter.full_description }}</div>
               </div>
             </div>
           </div>
@@ -187,37 +168,48 @@
       </div>
 
       <!-- 最终化阶段 -->
-      <div class="timeline-stage" v-if="finalizationLogs.length > 0">
-        <div class="stage-header">
-          <div class="stage-icon finalization">✓</div>
-          <div class="stage-content">
-            <div class="stage-title">最终化阶段</div>
-            <div class="stage-subtitle">生成最终答案</div>
-          </div>
-        </div>
+      <div class="flow-section" v-if="finalizationLogs.length > 0 || processLogs.final_descriptions">
+        <div class="phase-title">最终化阶段</div>
+        <div class="phase-description">生成最终答案</div>
 
-        <div class="stage-body" v-if="expandedStages.finalization">
-          <div class="logs-group">
-            <div class="log-item" v-for="(log, idx) in finalizationLogs" :key="'final-' + idx">
-              <div class="log-timestamp">{{ formatTime(log.timestamp) }}</div>
-              <div class="log-badge" :class="log.status">{{ log.status }}</div>
-              <div class="log-message">{{ log.message }}</div>
-              <div class="log-data" v-if="Object.keys(log.data).length > 0">
-                <div v-for="(val, key) in log.data" :key="key" class="data-item">
-                  <span class="data-key">{{ key }}:</span>
-                  <span class="data-value">{{ formatLogData(val) }}</span>
-                </div>
+        <!-- 最终描述 -->
+        <div class="final-section" v-if="processLogs.final_descriptions || processLogs.final_descriptions_str">
+          <div class="final-title">最终分析结果</div>
+          <div class="final-descriptions-box">
+            <div v-if="processLogs.final_descriptions_str">
+              {{ processLogs.final_descriptions_str }}
+            </div>
+            <div v-else-if="processLogs.final_descriptions">
+              <div v-for="(desc, idx) in processLogs.final_descriptions" :key="'d' + idx" class="final-desc-line">
+                <span class="desc-number">{{ idx + 1 }}.</span>
+                <span class="desc-text">{{ desc }}</span>
               </div>
             </div>
           </div>
         </div>
+
+        <!-- 最终帧 -->
+        <div class="final-section" v-if="processLogs.final_frame_paths && processLogs.final_frame_paths.length > 0">
+          <div class="final-title">最终帧数据</div>
+          <div class="final-frames-box">
+            <div class="frame-row" v-for="(frame, idx) in processLogs.final_frame_paths" :key="'pf' + idx">
+              <span class="frame-index">帧 {{ idx + 1 }}</span>
+              <span class="frame-path">{{ frame }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 空状态 -->
+      <div class="empty-state" v-if="!hasInitialization && iterationCount === 0 && finalizationLogs.length === 0">
+        <div class="empty-text">暂无分析过程数据</div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { defineProps, ref, computed, onMounted, watch } from 'vue'
+import { defineProps, ref, computed } from 'vue'
 
 const props = defineProps({
   processLogs: {
@@ -226,28 +218,7 @@ const props = defineProps({
   }
 })
 
-// State management
-const expandedStages = ref({
-  initialization: true,
-  iterations: true,
-  finalization: true
-})
-
-const expandedIterations = ref({})
-
-// 初始化所有迭代项为展开状态
-const initializeExpandedIterations = () => {
-  if (props.processLogs?.iterations) {
-    props.processLogs.iterations.forEach((_, idx) => {
-      expandedIterations.value[idx] = true
-    })
-  }
-}
-
-onMounted(initializeExpandedIterations)
-watch(() => props.processLogs?.iterations?.length, initializeExpandedIterations)
-
-// Computed properties
+// Computed
 const hasInitialization = computed(() => {
   return props.processLogs?.initialization && props.processLogs.initialization.length > 0
 })
@@ -270,566 +241,579 @@ const totalDuration = computed(() => {
   return (end - start).toFixed(1)
 })
 
-// Filtered logs by stage
-const initializationLogs = computed(() => {
-  return filterLogsByStage('model_initialization')
-    .concat(filterLogsByStage('sampling').filter(log => !log.data?.iteration))
-    .concat(filterLogsByStage('description_scoring').filter(log => !log.data?.iteration))
-})
-
-const iterationLogs = computed(() => {
-  return filterLogsByStage('iteration')
-})
-
 const finalizationLogs = computed(() => {
   return filterLogsByStage('finalization').concat(filterLogsByStage('answering'))
 })
 
-// Group iterations with their logs
 const groupedIterations = computed(() => {
   return props.processLogs?.iterations || []
 })
 
-const iterationProgressLogs = computed(() => {
-  const logs = {}
-  iterationLogs.value.forEach(log => {
-    const iterNum = log.data?.iteration ?? null
-    if (iterNum !== null) {
-      if (!logs[iterNum - 1]) logs[iterNum - 1] = []
-      logs[iterNum - 1].push(log)
-    }
-  })
-  return logs
-})
-
-// Helper functions
 function filterLogsByStage(stage) {
   if (!props.processLogs?.progress) return []
   return props.processLogs.progress.filter(log => log.stage === stage)
 }
 
-function toggleStage(stage) {
-  // 保留函数以防后续需要，但不执行任何操作
-}
-
-function toggleIteration(idx) {
-  // 保留函数以防后续需要，但不执行任何操作
-}
-
-function formatTime(timestamp) {
-  if (!timestamp) return 'N/A'
-  const date = new Date(timestamp * 1000)
-  return date.toLocaleTimeString('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  })
-}
-
-function formatLogData(val) {
-  if (typeof val === 'string') return val
-  if (typeof val === 'number') return val.toFixed(2)
-  if (typeof val === 'object') return JSON.stringify(val)
+function formatTime(val) {
+  if (typeof val === 'number') return val.toFixed(1)
   return String(val)
+}
+
+function isIterationCompleted(iter) {
+  // 如果迭代包含了完整的新_score、acceleration和action信息，则判定为已完成
+  return iter.new_score !== null && iter.new_score !== undefined && 
+         iter.acceleration !== null && iter.acceleration !== undefined &&
+         iter.action !== null && iter.action !== undefined
 }
 </script>
 
 <style scoped>
+* {
+  box-sizing: border-box;
+}
+
 .process-flow {
   width: 100%;
-  background: white;
+  background: var(--bg-page);
+  padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-/* Timeline Header */
-.timeline-header {
-  padding: 16px 0 12px;
-  border-bottom: 2px solid #f0f0f0;
-  margin-bottom: 20px;
+/* ==================== Header ==================== */
+.flow-header {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
+  padding: 24px;
+  border-radius: 12px;
+  color: white;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
 }
 
-.timeline-title {
-  margin: 0 0 12px;
-  font-size: 16px;
-  font-weight: 600;
-  color: #333;
+.header-content {
+  max-width: 100%;
 }
 
-.timeline-summary {
+.header-title {
+  margin: 0 0 16px 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.header-stats {
   display: flex;
   gap: 24px;
   flex-wrap: wrap;
 }
 
-.summary-item {
+.stat {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: 8px;
+  font-size: 14px;
+  opacity: 0.95;
 }
 
-.summary-label {
-  color: #666;
-}
-
-.summary-value {
-  color: #1890ff;
+.stat-text {
   font-weight: 600;
 }
 
-/* Timeline */
-.timeline {
-  position: relative;
-}
+/* ==================== Content Flow ==================== */
 
-.timeline::before {
-  content: '';
-  position: absolute;
-  left: 20px;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: linear-gradient(180deg, #1890ff, #52c41a, #faad14);
-}
-
-/* Timeline Stage */
-.timeline-stage {
-  margin-bottom: 24px;
-  position: relative;
-  margin-left: 0;
-}
-
-.stage-header {
+.content-flow {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: #f9f9f9;
-  border-left: 4px solid #1890ff;
-  border-radius: 6px;
-  cursor: pointer;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.flow-section {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: var(--shadow);
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.phase-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 6px;
+}
+
+.phase-description {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+/* ==================== Videos Grid ==================== */
+.videos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 16px;
+}
+
+.video-card {
+  background: linear-gradient(135deg, var(--bg-page), var(--bg-page-2));
+  border: 1px solid color-mix(in srgb, var(--primary) 15%, transparent);
+  border-radius: 10px;
+  overflow: hidden;
   transition: all 0.3s;
 }
 
-.stage-header:hover {
-  background: #f5f5f5;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+.video-card:hover {
+  box-shadow: var(--shadow);
+  border-color: var(--primary);
 }
 
-.stage-icon {
-  font-size: 20px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: white;
-  flex-shrink: 0;
+.card-header {
+  padding: 14px;
+  background: var(--bg-card);
+  border-bottom: 1px solid color-mix(in srgb, var(--primary) 15%, transparent);
 }
 
-.stage-icon.initialization {
-  background: #e6f7ff;
-  color: #1890ff;
-}
-
-.stage-icon.iteration {
-  background: #f6ffed;
-  color: #52c41a;
-}
-
-.stage-icon.finalization {
-  background: #fff7e6;
-  color: #faad14;
-}
-
-.stage-content {
-  flex: 1;
-}
-
-.stage-title {
-  font-weight: 600;
-  color: #333;
-  font-size: 14px;
-}
-
-.stage-subtitle {
-  font-size: 12px;
-  color: #999;
-  margin-top: 2px;
-}
-
-.stage-toggle {
+.video-header {
   display: flex;
   align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  color: var(--text-main);
+  font-size: 15px;
 }
 
-.toggle-icon {
-  font-size: 12px;
-  color: #666;
-  transition: transform 0.3s;
-}
-
-.stage-body {
-  padding: 16px;
-  background: #fafafa;
-  border-radius: 0 6px 6px 0;
-  margin-top: 8px;
-}
-
-/* Initialization Section */
-.init-videos {
-  margin-bottom: 16px;
-}
-
-.init-video {
-  padding: 12px;
-  background: white;
-  border-radius: 6px;
-  margin-bottom: 12px;
-  border-left: 3px solid #1890ff;
-}
-
-.video-name {
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 8px;
-}
-
-.video-details {
+.card-body {
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 14px;
 }
 
-.detail-item {
-  display: flex;
+.description-section {
+  background: var(--bg-card);
+  padding: 10px;
+  border-radius: 6px;
+  border-left: 3px solid var(--primary);
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  letter-spacing: 0.3px;
+}
+
+.description-content {
   font-size: 13px;
-  gap: 8px;
+  color: var(--text-main);
+  line-height: 1.5;
 }
 
-.detail-label {
-  color: #666;
-  min-width: 70px;
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
 }
 
-.detail-value {
-  color: #333;
-  flex: 1;
-  word-break: break-word;
+.metric {
+  background: var(--bg-card);
+  padding: 10px;
+  border-radius: 6px;
+  text-align: center;
+  border: 1px solid color-mix(in srgb, var(--primary) 15%, transparent);
 }
 
-.detail-value.score {
-  color: #1890ff;
+.metric-label {
+  font-size: 11px;
+  color: var(--text-muted);
   font-weight: 600;
+  text-transform: uppercase;
+  margin-bottom: 4px;
 }
 
-/* Iteration Section */
-.iteration-list {
+.metric-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.frames-info {
+  background: var(--bg-card);
+  padding: 10px;
+  border-radius: 6px;
+  border-left: 3px solid var(--success);
+}
+
+.info-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--success);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  letter-spacing: 0.3px;
+}
+
+.frames-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 4px;
 }
 
-.iteration-item {
-  background: white;
-  border-radius: 6px;
+.frame-item {
+  font-size: 12px;
+  color: var(--text-muted);
+  word-break: break-all;
+  font-family: 'Consolas', monospace;
+  line-height: 1.4;
+}
+
+.frame-item.more {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ==================== Iterations ==================== */
+.iterations-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.iteration-card {
+  background: linear-gradient(135deg, var(--bg-page), var(--bg-page-2));
+  border: 1px solid color-mix(in srgb, var(--primary) 15%, transparent);
+  border-radius: 10px;
   overflow: hidden;
-  border-left: 4px solid #52c41a;
+  transition: all 0.3s;
+}
+
+.iteration-card:hover {
+  box-shadow: var(--shadow);
+  border-color: var(--primary);
 }
 
 .iteration-header {
+  padding: 14px;
+  background: var(--bg-card);
+  border-bottom: 1px solid color-mix(in srgb, var(--primary) 15%, transparent);
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
-  cursor: pointer;
-  transition: background 0.2s;
-  background: #f9f9f9;
-}
-
-.iteration-header:hover {
-  background: #f5f5f5;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .iteration-number {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  background: #52c41a;
+  width: 40px;
+  height: 40px;
+  background: var(--primary);
   color: white;
   border-radius: 50%;
-  font-weight: 600;
-  font-size: 13px;
+  font-weight: 700;
+  font-size: 14px;
   flex-shrink: 0;
 }
 
-.iteration-info {
-  flex: 1;
-  display: flex;
-  gap: 16px;
+.iteration-video {
   font-size: 13px;
-  flex-wrap: wrap;
+  color: var(--text-muted);
+  flex: 1;
+  min-width: 150px;
 }
 
-.info-item {
-  color: #666;
-}
-
-.info-item strong {
-  color: #333;
-  font-weight: 600;
-}
-
-.iteration-toggle {
+.iteration-status {
   display: flex;
-  align-items: center;
+  gap: 6px;
 }
 
-.iteration-details {
-  padding: 12px;
-  background: #f9f9f9;
+.status-badge {
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--danger) 20%, transparent);
+  color: var(--danger);
+  text-transform: uppercase;
+}
+
+.status-badge.active {
+  background: color-mix(in srgb, var(--success) 20%, transparent);
+  color: var(--success);
+}
+
+.status-badge.completed {
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
+  color: var(--primary);
+}
+
+.iteration-body {
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
-/* Iteration Sections */
 .iteration-section {
-  background: white;
+  background: var(--bg-card);
   padding: 12px;
-  border-radius: 4px;
-  border-left: 3px solid #1890ff;
+  border-radius: 6px;
 }
 
-.section-label {
-  font-weight: 600;
-  color: #333;
-  font-size: 13px;
+.sampling-box {
+  background: var(--bg-card);
+  padding: 12px;
+  border-radius: 6px;
+}
+
+.time-info {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--primary);
   margin-bottom: 8px;
-}
-
-.section-content {
-  font-size: 13px;
-}
-
-.param-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
-.param-row:last-child {
-  margin-bottom: 0;
-}
-
-.param-name {
-  color: #666;
-  min-width: 100px;
-}
-
-.param-value {
-  color: #333;
-  font-weight: 500;
-}
-
-/* Score Change */
-.score-change {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
 }
 
-.score-item {
+.time {
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
+  padding: 4px 10px;
+  border-radius: 4px;
+}
+
+.arrow {
+  color: var(--text-muted);
+}
+
+.sampling-details {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  font-size: 12px;
+}
+
+.detail {
+  color: var(--text-muted);
+}
+
+.score-comparison {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.score-box {
   flex: 1;
+  min-width: 100px;
+  padding: 12px;
+  background: var(--bg-card);
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--primary) 15%, transparent);
+  text-align: center;
+}
+
+.score-box.before {
+  border-left: 4px solid var(--primary);
+}
+
+.score-box.after {
+  border-left: 4px solid var(--success);
 }
 
 .score-label {
-  color: #999;
-  font-size: 12px;
-}
-
-.score-value {
-  font-size: 16px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
   font-weight: 600;
+  margin-bottom: 4px;
 }
 
-.score-value.old {
-  color: #faad14;
-}
-
-.score-value.new {
-  color: #52c41a;
-}
-
-.score-arrow {
-  color: #ccc;
+.score-num {
   font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
 }
 
-.acceleration-info {
-  display: flex;
-  gap: 8px;
-  padding-top: 8px;
-  border-top: 1px solid #f0f0f0;
+.acceleration-box {
+  flex: 1;
+  min-width: 100px;
+  padding: 12px;
+  background: var(--bg-card);
+  border-radius: 6px;
+  border-left: 4px solid var(--primary);
+  text-align: center;
+}
+
+.acceleration-box.positive {
+  border-left: 4px solid var(--success);
 }
 
 .accel-label {
-  color: #666;
-  font-size: 13px;
-}
-
-.accel-value {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
   font-weight: 600;
-  font-size: 13px;
+  margin-bottom: 4px;
 }
 
-.accel-value.positive {
-  color: #52c41a;
+.accel-num {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
 }
 
-.accel-value.neutral {
-  color: #999;
+.priority-comparison {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
-/* Description Box */
-.description-box {
-  background: #f5f5f5;
+.priority-item {
+  flex: 1;
+  min-width: 120px;
   padding: 10px;
-  border-radius: 4px;
-  font-family: 'Courier New', monospace;
+  background: var(--bg-card);
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--primary) 15%, transparent);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.priority-item .label {
   font-size: 12px;
-  color: #333;
-  line-height: 1.5;
-  white-space: pre-wrap;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.priority-item .value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.description-box {
+  background: var(--bg-card);
+  padding: 12px;
+  border-radius: 6px;
+  border-left: 3px solid var(--primary-2);
+  font-size: 13px;
+  color: var(--text-main);
+  line-height: 1.6;
   word-break: break-word;
-  max-height: 200px;
+}
+
+.description-box.full-desc {
+  max-height: 180px;
   overflow-y: auto;
 }
 
-.description-box.full {
-  max-height: 300px;
+.description-box.full-desc::-webkit-scrollbar {
+  width: 4px;
 }
 
-/* Status Flags */
-.status-flag {
+.description-box.full-desc::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 2px;
+}
+
+/* ==================== Final ==================== */
+.final-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+.final-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 12px;
+}
+
+.final-descriptions-box {
+  background: linear-gradient(135deg, var(--bg-page), var(--bg-page-2));
+  padding: 16px;
+  border-radius: 8px;
+  border-left: 4px solid var(--primary);
+  line-height: 1.8;
+  color: var(--text-main);
+  font-size: 14px;
+}
+
+.final-desc-line {
   display: flex;
-  align-items: center;
   gap: 8px;
-  padding: 6px 0;
-  font-size: 13px;
-  color: #666;
+  margin-bottom: 8px;
 }
 
-.status-flag.terminated {
-  color: #ff4d4f;
+.final-desc-line:last-child {
+  margin-bottom: 0;
 }
 
-.flag-icon {
+.desc-number {
+  font-weight: 700;
+  color: var(--primary);
+  min-width: 24px;
+}
+
+.desc-text {
+  flex: 1;
+}
+
+.final-frames-box {
+  background: linear-gradient(135deg, var(--bg-page), var(--bg-page-2));
+  border-radius: 8px;
+  border-left: 4px solid var(--success);
+  overflow: hidden;
+}
+
+.frame-row {
+  display: flex;
+  padding: 12px 16px;
+  border-bottom: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent);
+  gap: 12px;
   font-size: 12px;
 }
 
-/* Logs Group */
-.logs-group {
+.frame-row:last-child {
+  border-bottom: none;
+}
+
+.frame-index {
+  font-weight: 700;
+  color: var(--success);
+  min-width: 40px;
+}
+
+.frame-path {
+  flex: 1;
+  color: var(--text-muted);
+  font-family: 'Consolas', monospace;
+  word-break: break-all;
+}
+
+/* ==================== Empty ==================== */
+.empty-state {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
 }
 
-.log-item {
-  padding: 10px;
-  background: white;
-  border-radius: 4px;
-  border-left: 3px solid #d9d9d9;
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  font-size: 12px;
-}
-
-.log-timestamp {
-  color: #999;
-  min-width: 65px;
-  flex-shrink: 0;
-  font-family: monospace;
-}
-
-.log-badge {
-  padding: 2px 8px;
-  border-radius: 3px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  min-width: 60px;
-  text-align: center;
-  flex-shrink: 0;
-}
-
-.log-badge.started {
-  background: #e6f7ff;
-  color: #1890ff;
-}
-
-.log-badge.completed {
-  background: #f6ffed;
-  color: #52c41a;
-}
-
-.log-badge.tool_decided {
-  background: #fff7e6;
-  color: #faad14;
-}
-
-.log-badge.failed {
-  background: #fff2f0;
-  color: #ff4d4f;
-}
-
-.log-message {
-  flex: 1;
-  color: #333;
-  line-height: 1.4;
-}
-
-.log-data {
-  width: 100%;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid #f0f0f0;
-}
-
-.data-tag {
-  background: #f0f0f0;
-  padding: 2px 8px;
-  border-radius: 2px;
-  font-size: 11px;
-  color: #666;
-}
-
-.data-item {
-  display: block;
-  width: 100%;
-  font-size: 12px;
-  padding: 4px 0;
-  color: #333;
-}
-
-.data-key {
-  color: #666;
-  margin-right: 6px;
-}
-
-.data-value {
-  color: #333;
-  font-family: monospace;
-  word-break: break-all;
+.empty-text {
+  font-size: 16px;
+  font-weight: 500;
 }
 </style>

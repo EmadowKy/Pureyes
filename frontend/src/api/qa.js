@@ -132,6 +132,48 @@ export const qaApi = {
    */
   getTaskProgress(taskId) {
     return api.get(`/qa/task/${taskId}/progress`)
+  },
+
+  /**
+   * 订阅任务实时进度流（使用 SSE）
+   * @param {string} taskId - 任务 ID
+   * @param {Function} onProgress - 进度回调函数
+   * @param {Function} onComplete - 完成回调函数
+   * @param {Function} onError - 错误回调函数
+   * @returns {EventSource} - 返回 EventSource 对象，可以通过 .close() 关闭连接
+   */
+  subscribeTaskProgress(taskId, onProgress, onComplete, onError) {
+    const token = localStorage.getItem('access_token') || localStorage.getItem('token')
+    const url = `/api/qa/task/${taskId}/stream${token ? '?token=' + encodeURIComponent(token) : ''}`
+    
+    const eventSource = new EventSource(url)
+    
+    eventSource.addEventListener('message', (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        
+        if (data.type === 'progress' && onProgress) {
+          onProgress(data.data)
+        } else if (data.type === 'complete' && onComplete) {
+          onComplete(data)
+          eventSource.close()
+        } else if (data.type === 'connected') {
+          console.log('SSE 连接已建立，任务:', taskId)
+        }
+      } catch (error) {
+        console.error('解析 SSE 数据失败:', error)
+      }
+    })
+    
+    eventSource.addEventListener('error', (event) => {
+      console.error('SSE 连接错误:', event)
+      eventSource.close()
+      if (onError) {
+        onError(event)
+      }
+    })
+    
+    return eventSource
   }
 }
 
