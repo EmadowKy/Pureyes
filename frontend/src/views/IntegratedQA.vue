@@ -79,9 +79,7 @@
                 <div class="processing-spinner"></div>
                 <p class="processing-text">AI 正在分析中，请稍候...</p>
               </div>
-              <div v-else class="answer-content">
-                {{ viewRecordDetail.model_result?.answer || viewRecordDetail.model_result?.predicted_answer || '无回答' }}
-              </div>
+              <div v-else class="answer-content" v-html="detailAnswerHtml || '<p>无回答</p>'"></div>
             </div>
           </div>
 
@@ -259,7 +257,7 @@
                     <span class="spinner-small"></span>
                     AI 正在分析中...
                   </span>
-                  <span v-else>{{ viewRecordDetail.model_result?.answer || viewRecordDetail.model_result?.predicted_answer || '无回答' }}</span>
+                  <div v-else v-html="detailAnswerHtml || '<p>无回答</p>'"></div>
                 </div>
               </div>
 
@@ -501,6 +499,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
+import { marked } from 'marked'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { qaApi } from '../api/qa'
@@ -757,6 +756,23 @@ const isDetailExpanded = ref(false)
 const isClosing = ref(false)
 const overlayRef = ref(null)
 const popupRef = ref(null)
+
+function renderMarkdown(text = '') {
+  if (!text) return ''
+  const html = marked.parse(text, {
+    mangle: false,
+    headerIds: false,
+    breaks: true
+  })
+  return html.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+}
+
+const detailAnswerHtml = computed(() => {
+  const detail = viewRecordDetail.value
+  if (!detail || !detail.model_result) return ''
+  const raw = detail.model_result.answer || detail.model_result.predicted_answer || ''
+  return renderMarkdown(raw)
+})
 
 // 获取当前用户token
 function getCurrentToken() {
@@ -1778,7 +1794,7 @@ function getDeletedVideoCount() {
   border-radius: 8px;
   line-height: 1.6;
   color: var(--text-main);
-  white-space: pre-wrap;
+  white-space: normal;
   word-break: break-word;
 }
 .detail-videos .video-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
@@ -2044,8 +2060,29 @@ function getDeletedVideoCount() {
   font-size: 15px;
   line-height: 1.6;
   color: var(--text-main);
-  white-space: pre-wrap;
+  white-space: normal;
   word-break: break-word;
+}
+
+.answer-content :deep(p) {
+  margin: 0 0 10px 0;
+}
+
+.answer-content :deep(ul),
+.answer-content :deep(ol) {
+  margin: 0 0 10px 18px;
+  padding-left: 18px;
+}
+
+.answer-content :deep(li) {
+  margin-bottom: 6px;
+}
+
+.answer-content :deep(code) {
+  background: color-mix(in srgb, var(--text-main) 10%, transparent);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-family: 'Consolas', monospace;
 }
 
 /* 视频网格 */

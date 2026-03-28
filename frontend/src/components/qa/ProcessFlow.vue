@@ -190,19 +190,9 @@
 
         <template v-else>
           <!-- 最终描述 -->
-          <div class="final-section" v-if="processLogs.final_descriptions || processLogs.final_descriptions_str">
+          <div class="final-section" v-if="finalDescriptionHtml">
             <div class="final-title">最终分析结果</div>
-            <div class="final-descriptions-box">
-              <div v-if="processLogs.final_descriptions_str">
-                {{ processLogs.final_descriptions_str }}
-              </div>
-              <div v-else-if="processLogs.final_descriptions">
-                <div v-for="(desc, idx) in processLogs.final_descriptions" :key="'d' + idx" class="final-desc-line">
-                  <span class="desc-number">{{ idx + 1 }}.</span>
-                  <span class="desc-text">{{ desc }}</span>
-                </div>
-              </div>
-            </div>
+            <div class="final-descriptions-box" v-html="finalDescriptionHtml"></div>
           </div>
 
           <!-- 最终帧 -->
@@ -228,6 +218,7 @@
 
 <script setup>
 import { defineProps, ref, computed } from 'vue'
+import { marked } from 'marked'
 
 const props = defineProps({
   processLogs: {
@@ -259,6 +250,29 @@ const uniqueStages = computed(() => {
 const isInitializationInProgress = computed(() => {
   const hasInitStage = props.processLogs?.progress?.some(log => log.stage === 'initialization')
   return iterationCount.value === 0 && (hasInitStage || hasInitialization.value)
+})
+
+function renderMarkdown(text = '') {
+  if (!text) return ''
+  const html = marked.parse(text, {
+    mangle: false,
+    headerIds: false,
+    breaks: true
+  })
+  return html.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
+}
+
+const finalDescriptionHtml = computed(() => {
+  const text = props.processLogs?.final_descriptions_str
+  if (text) return renderMarkdown(text)
+
+  const arr = props.processLogs?.final_descriptions
+  if (arr && arr.length > 0) {
+    const md = arr.map((desc, idx) => `${idx + 1}. ${desc}`).join('\n')
+    return renderMarkdown(md)
+  }
+
+  return ''
 })
 
 const totalDuration = computed(() => {
@@ -827,6 +841,27 @@ function isIterationCompleted(iter) {
   line-height: 1.8;
   color: var(--text-main);
   font-size: 14px;
+}
+
+.final-descriptions-box :deep(p) {
+  margin: 0 0 8px 0;
+}
+
+.final-descriptions-box :deep(ol),
+.final-descriptions-box :deep(ul) {
+  margin: 0 0 8px 16px;
+  padding-left: 16px;
+}
+
+.final-descriptions-box :deep(li) {
+  margin-bottom: 4px;
+}
+
+.final-descriptions-box :deep(code) {
+  background: color-mix(in srgb, var(--text-main) 10%, transparent);
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-family: 'Consolas', monospace;
 }
 
 .final-desc-line {
