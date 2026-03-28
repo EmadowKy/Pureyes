@@ -282,9 +282,9 @@
                   <el-icon><Delete /></el-icon> 删除记录
                 </el-button>
               </div>
-              
-              <div style="position: absolute; bottom: 20px; left: 20px; right: 20px;">
-                <el-button @click="toggleDetailExpand" type="primary" size="default" style="width: 100%; padding: 14px 0; font-size: 16px;">
+
+              <div class="detail-bottom-action">
+                <el-button @click="toggleDetailExpand" type="primary" size="default" class="detail-expand-btn">
                   查看详情信息
                 </el-button>
               </div>
@@ -1764,6 +1764,14 @@ function getDeletedVideoCount() {
   flex-direction: column;
   gap: 20px;
 }
+.collapsed-layout {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100%;
+  padding-bottom: 90px;
+}
 .detail-meta {
   display: flex;
   align-items: center;
@@ -2062,6 +2070,22 @@ function getDeletedVideoCount() {
   color: var(--text-main);
   white-space: normal;
   word-break: break-word;
+}
+
+.detail-bottom-action {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 0 0 0;
+  margin-top: auto;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--bg-card) 85%, #eef2ff 15%));
+}
+
+.detail-expand-btn {
+  width: 100%;
+  padding: 14px 0;
+  font-size: 16px;
 }
 
 .answer-content :deep(p) {
