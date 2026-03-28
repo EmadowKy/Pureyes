@@ -122,17 +122,14 @@
               </h2>
             </div>
             <div class="card-body">
-              <div v-if="!viewRecordDetail.model_result?.process_logs && viewRecordDetail.status !== 'processing'" class="empty-process">
+              <div v-if="viewRecordDetail.status === 'processing'" class="loading-process">
+                <div class="loading-spinner"></div>
+                <p>模型运行中，请稍候...</p>
+              </div>
+              <div v-else-if="!viewRecordDetail.model_result?.process_logs" class="empty-process">
                 <div class="empty-icon">📊</div>
                 <p>暂无分析过程信息</p>
               </div>
-              <!-- 进行中任务显示实时流 -->
-              <RealtimeStreamProcessFlow 
-                v-if="viewRecordDetail.status === 'processing'"
-                :task-id="viewRecordDetail.record_id"
-                :token="getCurrentToken()"
-                @complete="handleStreamComplete"
-              />
               <!-- 已完成任务显示完整过程 -->
               <ProcessFlow v-else-if="viewRecordDetail.model_result?.process_logs" :process-logs="viewRecordDetail.model_result.process_logs" />
             </div>
@@ -202,12 +199,7 @@
               <el-icon><Monitor /></el-icon>
               <span>{{ currentVideo ? currentVideo.name : '请选择视频' }}</span>
             </div>
-            <div class="player-actions">
-              <el-button @click="togglePlayerFullscreen" circle size="small" title="全屏">
-                <el-icon v-if="!isPlayerFullscreen"><FullScreen /></el-icon>
-                <el-icon v-else><Close /></el-icon>
-              </el-button>
-            </div>
+
           </div>
 
           <div class="player-wrapper" ref="playerWrapperRef">
@@ -225,7 +217,7 @@
         <!-- 记录详情视图 - 仅在非展开状态时显示 -->
         <div v-if="viewRecordDetail && !isDetailExpanded" class="record-detail-panel">
           <div class="detail-header">
-            <el-button @click="() => { viewRecordDetail = null; relatedVideos = []; isDetailExpanded = false }" size="small" class="back-button">
+            <el-button @click="() => { stopStatusCheck(); viewRecordDetail = null; relatedVideos = []; isDetailExpanded = false }" size="small" class="back-button">
               <el-icon><ArrowLeft /></el-icon> 返回列表
             </el-button>
             <h2><el-icon><ChatLineRound /></el-icon> 问答详情</h2>
@@ -505,7 +497,6 @@ import { videoApi } from '../api/video'
 import { getAuthInfo } from '../api/auth'
 import { VideoPlay, Monitor, FullScreen, Close, ChatLineRound, Download, Upload, Delete, Edit, ArrowLeft, ArrowRight, Warning, Loading } from '@element-plus/icons-vue'
 import ProcessFlow from '../components/qa/ProcessFlow.vue'
-import RealtimeStreamProcessFlow from '../components/qa/RealtimeStreamProcessFlow.vue'
 
 const router = useRouter()
 const username = ref('用户')
@@ -586,7 +577,7 @@ function showNotificationBanner(message, type = 'success') {
 const videoList = ref([])
 const currentVideo = ref(null)
 const videoRef = ref(null)
-const isPlayerFullscreen = ref(false)
+
 const playerWrapperRef = ref(null)
 const showUploadDialog = ref(false)
 const uploadVideoName = ref('')
@@ -696,7 +687,7 @@ async function handleRenameSubmit() {
   }
 }
 function playVideo(video) { currentVideo.value = video }
-function togglePlayerFullscreen() { isPlayerFullscreen.value = !isPlayerFullscreen.value }
+
 const selectedVideos = computed(() => videoList.value.filter(v => v.selected))
 
 /* 轮询 */
@@ -816,14 +807,19 @@ async function viewRecord(record) {
   viewRecordDetail.value = record
   relatedVideos.value = record.video_paths || []
   isDetailExpanded.value = false
+  // 如果任务正在处理，启动状态轮询
   if (record.status === 'processing') {
-    await refreshTaskProgress(record.record_id)
+    startStatusCheck()
+  } else {
+    // 如果已完成，停止轮询
+    stopStatusCheck()
   }
 }
 
 function toggleDetailExpand() {
   if (isDetailExpanded.value) {
-    // 关闭时添加淡出动画
+    // 关闭时添加淡出动画并停止轮询
+    stopStatusCheck()
     isClosing.value = true
     setTimeout(() => {
       isDetailExpanded.value = false
@@ -865,6 +861,10 @@ async function submitQuestion() {
         if (newRecord) {
           viewRecordDetail.value = newRecord
           isDetailExpanded.value = true
+          // 启动轮询检查任务状态
+          if (newRecord.status === 'processing') {
+            startStatusCheck()
+          }
         }
       }, 300)
     }
@@ -873,22 +873,67 @@ async function submitQuestion() {
   }
 }
 
-// 处理实时流完成
-async function handleStreamComplete(status) {
-  console.log('Stream complete, status:', status)
-  // 等待一下后端完全存储数据
-  await new Promise(resolve => setTimeout(resolve, 500))
+// 轮询检查任务状态
+let statusCheckInterval = null
+
+function startStatusCheck() {
+  // 清除之前的轮询（如果存在）
+  if (statusCheckInterval) {
+    clearInterval(statusCheckInterval)
+  }
   
-  // 重新获取记录列表和该任务的最新数据
-  await loadStats()
-  await loadRecords()
+  console.log('开始轮询任务状态，record_id:', viewRecordDetail.value?.record_id)
+  let checkCount = 0
   
-  // 更新当前显示的记录（刷新答案和完整过程）
-  if (viewRecordDetail.value) {
-    const updatedRecord = records.value.find(r => r.record_id === viewRecordDetail.value.record_id)
-    if (updatedRecord) {
-      viewRecordDetail.value = updatedRecord
+  // 每3秒检查一次任务状态
+  statusCheckInterval = setInterval(async () => {
+    checkCount++
+    if (viewRecordDetail.value && viewRecordDetail.value.status === 'processing') {
+      try {
+        const recordId = viewRecordDetail.value.record_id
+        const response = await qaApi.getRecord(recordId)
+        
+        // 处理两种可能的响应格式
+        const record = response.data || response
+        
+        console.log(`[检查 #${checkCount}] 任务 ${recordId} 状态:`, record?.status, '完整数据:', record)
+        
+        if (record) {
+          // 实时更新当前显示的记录
+          viewRecordDetail.value = record
+          
+          // 如果任务完成，停止检查、重新加载列表并更新显示数据
+          if (record.status !== 'processing') {
+            console.log('✅ 任务完成！状态:', record.status)
+            stopStatusCheck()
+            
+            await loadStats()
+            await loadRecords()
+            
+            // 确保用最新的列表数据更新当前显示的记录
+            const updatedRecord = records.value.find(r => r.record_id === record.record_id)
+            if (updatedRecord) {
+              viewRecordDetail.value = updatedRecord
+              console.log('✅ 已用最新数据更新显示:', {
+                answer: updatedRecord.model_result?.answer?.substring(0, 50),
+                hasProcessLogs: !!updatedRecord.model_result?.process_logs
+              })
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`[检查 #${checkCount}] 错误:`, error)
+      }
+    } else {
+      console.log(`[检查 #${checkCount}] 跳过：status 不是 processing 或 viewRecordDetail 为空`)
     }
+  }, 3000)
+}
+
+function stopStatusCheck() {
+  if (statusCheckInterval) {
+    clearInterval(statusCheckInterval)
+    statusCheckInterval = null
   }
 }
 
@@ -2128,6 +2173,37 @@ function getDeletedVideoCount() {
 }
 
 .empty-process p {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* 加载过程状态 */
+.loading-process {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--border-soft);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-process p {
   margin: 0;
   font-size: 14px;
 }

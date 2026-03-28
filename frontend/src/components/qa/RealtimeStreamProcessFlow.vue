@@ -104,82 +104,69 @@
 
                 <!-- 迭代详情 -->
                 <div class="iteration-details" v-if="expandedIterations[idx]">
-                  <!-- 始终显示卡片，数据会逐步填充 -->
-                  <div class="iteration-card">
-                    <!-- 决策信息 -->
-                    <div class="iteration-section">
+                  <!-- 条件渲染卡片 - 只在有数据时显示 -->
+                  <div class="iteration-card" v-if="getIterationData(iterNum)">
+                    <!-- 工具决策 section - 只在有 action 数据时显示 -->
+                    <div class="iteration-section" v-if="getIterationData(iterNum)?.action">
                       <div class="section-label">🎯 工具决策</div>
                       <div class="section-content">
-                        <div class="param-row" v-if="getIterationData(iterNum)?.action">
+                        <div class="param-row">
                           <span class="param-name">采样选项:</span>
                           <span class="param-value">{{ getIterationData(iterNum).action.option }}</span>
-                        </div>
-                        <div class="param-row loading" v-else>
-                          <span class="param-name">采样选项:</span>
-                          <span class="param-value skeleton">加载中...</span>
                         </div>
                         <div class="param-row" v-if="getIterationData(iterNum)?.priority_before">
                           <span class="param-name">迭代前优先级:</span>
                           <span class="param-value">{{ getIterationData(iterNum).priority_before.toFixed(2) }}</span>
                         </div>
-                        <div class="param-row loading" v-else>
-                          <span class="param-name">迭代前优先级:</span>
-                          <span class="param-value skeleton">加载中...</span>
-                        </div>
                       </div>
                     </div>
 
-                    <!-- 分数变化 -->
-                    <div class="iteration-section">
+                    <!-- 分数变化 section - 只在有 new_score 时显示 -->
+                    <div class="iteration-section" v-if="getIterationData(iterNum)?.new_score !== null && getIterationData(iterNum)?.new_score !== undefined">
                       <div class="section-label">📊 分数变化</div>
                       <div class="section-content">
                         <div class="score-change">
                           <div class="score-item">
                             <span class="score-label">迭代前分数:</span>
-                            <span v-if="getIterationData(iterNum)?.old_score !== null" class="score-value old">{{ getIterationData(iterNum).old_score?.toFixed(2) }}</span>
-                            <span v-else class="score-value skeleton">--</span>
+                            <span class="score-value old">{{ getIterationData(iterNum).old_score?.toFixed(2) }}</span>
                           </div>
                           <div class="score-arrow">→</div>
                           <div class="score-item">
                             <span class="score-label">迭代后分数:</span>
-                            <span v-if="getIterationData(iterNum)?.new_score !== null" class="score-value new">{{ getIterationData(iterNum).new_score?.toFixed(2) }}</span>
-                            <span v-else class="score-value skeleton">--</span>
+                            <span class="score-value new">{{ getIterationData(iterNum).new_score?.toFixed(2) }}</span>
                           </div>
                         </div>
                         <div class="acceleration-info">
                           <span class="accel-label">加速度:</span>
-                          <span v-if="getIterationData(iterNum)?.acceleration !== null" class="accel-value" :class="{ positive: getIterationData(iterNum).acceleration > 0, neutral: getIterationData(iterNum).acceleration === 0 }">
+                          <span class="accel-value" :class="{ positive: getIterationData(iterNum).acceleration > 0, neutral: getIterationData(iterNum).acceleration === 0 }">
                             {{ (getIterationData(iterNum).acceleration || 0).toFixed(2) }}
                           </span>
-                          <span v-else class="accel-value skeleton">--</span>
                         </div>
                       </div>
                     </div>
 
-                    <!-- 新增描述 -->
-                    <div class="iteration-section">
+                    <!-- 新增描述 section - 只在有内容时显示 -->
+                    <div class="iteration-section" v-if="getIterationData(iterNum)?.new_description_part">
                       <div class="section-label">📝 新增描述</div>
-                      <div v-if="getIterationData(iterNum)?.new_description_part" class="description-box">{{ getIterationData(iterNum).new_description_part }}</div>
-                      <div v-else class="description-box loading">暂无新增描述</div>
+                      <div class="description-box">{{ getIterationData(iterNum).new_description_part }}</div>
                     </div>
 
-                    <!-- 完整描述 -->
-                    <div class="iteration-section">
+                    <!-- 完整描述 section - 只在有内容时显示 -->
+                    <div class="iteration-section" v-if="getIterationData(iterNum)?.full_description">
                       <div class="section-label">📋 完整描述</div>
-                      <div v-if="getIterationData(iterNum)?.full_description" class="description-box full">{{ getIterationData(iterNum).full_description }}</div>
-                      <div v-else class="description-box loading">暂无描述</div>
+                      <div class="description-box full">{{ getIterationData(iterNum).full_description }}</div>
                     </div>
 
-                    <!-- 终止状态 -->
-                    <div class="iteration-section">
+                    <!-- 终止状态 section - 只在有数据时显示 -->
+                    <div class="iteration-section" v-if="getIterationData(iterNum)?.video_terminated !== undefined && getIterationData(iterNum)?.video_terminated !== null">
                       <div class="section-label">🛑 状态标志</div>
                       <div class="section-content">
-                        <div class="status-flag" v-if="getIterationData(iterNum)" :class="{ terminated: getIterationData(iterNum).video_terminated }">
+                        <div class="status-flag" :class="{ terminated: getIterationData(iterNum).video_terminated }">
                           <span v-if="getIterationData(iterNum).video_terminated" class="flag-icon">●</span>
                           <span v-else class="flag-icon">○</span>
                           <span class="flag-text">视频 {{ getIterationData(iterNum).video_terminated ? '已' : '未' }}终止</span>
                         </div>
-                        <div class="status-flag" v-if="getIterationData(iterNum)" :class="{ terminated: getIterationData(iterNum).global_terminated }">
+                        <div class="status-flag" v-if="getIterationData(iterNum)?.global_terminated !== undefined" :class="{ terminated: getIterationData(iterNum).global_terminated }">
                           <span v-if="getIterationData(iterNum).global_terminated" class="flag-icon">●</span>
                           <span v-else class="flag-icon">○</span>
                           <span class="flag-text">全局 {{ getIterationData(iterNum).global_terminated ? '已' : '未' }}终止</span>
@@ -187,7 +174,7 @@
                       </div>
                     </div>
 
-                    <!-- 处理步骤 -->
+                    <!-- 处理步骤 section - 只在有日志时显示 -->
                     <div class="iteration-section" v-if="iterationGroupedLogs[iterNum] && iterationGroupedLogs[iterNum].length > 0">
                       <div class="section-label">📌 处理步骤</div>
                       <div class="logs-group">
@@ -417,9 +404,23 @@ function connectStream() {
           const item = message.data
           progressItems.value.push(item)
           
-          // 如果消息中包含完整的迭代对象，保存它
+          // 如果消息中包含完整的迭代对象，进行深度合并（保留已有数据，更新新数据）
           if (item.data?.iteration_data && item.data?.iteration) {
-            iterationDataMap.value[item.data.iteration] = item.data.iteration_data
+            const iterNum = item.data.iteration
+            const newData = item.data.iteration_data
+            
+            if (iterationDataMap.value[iterNum]) {
+              // 深度合并：保留已有的字段，更新新的字段
+              iterationDataMap.value[iterNum] = {
+                ...iterationDataMap.value[iterNum],
+                ...newData,
+                // 确保 action 不被覆盖（如果新数据中没有 action，保留旧的）
+                action: newData.action || iterationDataMap.value[iterNum].action
+              }
+            } else {
+              // 第一次接收该迭代，直接赋值
+              iterationDataMap.value[iterNum] = newData
+            }
           }
           
           scrollToBottom()

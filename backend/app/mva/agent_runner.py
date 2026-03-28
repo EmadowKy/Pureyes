@@ -376,7 +376,10 @@ class AgentRunner:
                 'priority': TextBank['videos'][v_name].get('priority', 1.0)
             })
             
-            if g_term:
+            # Note: During initialization phase, we intentionally ignore g_term signals
+            # to ensure all videos are initialized before considering global termination.
+            # Global termination will be re-evaluated during the main iteration loop.
+            if False:  # Disabled during initialization phase
                 global_terminated = True
                 break
 

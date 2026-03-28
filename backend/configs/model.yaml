@@ -22,7 +22,7 @@ parameters:
   use_visual_answer: true # 是否提供关键帧图片 (对应 answer_visual_only 模版)
   use_text_answer: true # 是否提供文本描述 (对应 answer_text_only 模版)
   # 若两者均为 true, 则使用 answer_combined 模版
-  print_output: false
+  print_output: true
   skip_iteration: false # 直接回答
   question_analysis: true # 是否进行问题分析，生成 question_analysis 模版所需的提示词
 
@@ -47,154 +47,167 @@ parameters:
 prompts:
   answer_combined: |
     /no_think
-    /* 任务说明 */
-    你是一个面向视频问答任务的答案生成模型。
-    问题："{QUESTION}"
+    /* Task Description */
+    You are an Answer Generation model for the video question and answer task.
+    Here is a single-choice question about multiple videos.
+    Question: "{QUESTION}"
 
-    你将看到来自多个视频的关键帧。每个帧左上角都有水印，标明其所属视频（如 Video 1、Video 2）及时间戳。
-    同时你会获得每个视频的文本描述：
+    You are provided with multiple keyframes extracted from different videos. Each frame has a watermark in the top-left corner indicating which video it belongs to (e.g., "Video 1", "Video 2") and its timestamp.
+    You are also provided with textual descriptions for each video:
     {DESCRIPTIONS}
 
-    你的任务是综合分析所有关键帧与视频描述来回答问题。请关注：
-    1. 关键帧中与问题相关的具体视觉细节
-    2. 每个视频描述中提到的事件与细节
-    3. 视频之间的差异与相似之处
+    Your task is to analyze all the provided keyframes AND the video descriptions to answer the question. Pay attention to:
+    1. The specific visual details in keyframes relevant to answering the question.
+    2. The events and details described in each video description.
+    3. The differences and similarities between videos.
 
-    **输出格式：**
-    直接输出你的答案，无需额外解释、推理或其他文字。
+    **Output Format:**
+    Output only your answer 
 
   answer_visual_only: |
     /no_think
-    /* 任务说明 */
-    你是一个面向视频问答任务的答案生成模型。
-    问题："{QUESTION}"
+    /* Task Description */
+    You are an Answer Generation model for the video question and answer task.
+    Here is a single-choice question about multiple videos.
+    Question: "{QUESTION}"
 
-    你将看到来自多个视频的关键帧。每个帧左上角都有水印，标明其所属视频（如 Video 1、Video 2）及时间戳。
+    You are provided with multiple keyframes extracted from different videos. Each frame has a watermark in the top-left corner indicating which video it belongs to (e.g., "Video 1", "Video 2") and its timestamp.
 
-    你的任务是根据所有关键帧回答问题。请关注：
-    1. 关键帧中与问题相关的具体视觉细节
-    2. 每一帧所属的视频（由水印标明）
-    3. 不同视频帧之间的差异与相似之处
+    Your task is to analyze all the provided keyframes to answer the question. Pay attention to:
+    1. The specific visual details in keyframes relevant to answering the question.
+    2. Which video each frame belongs to (indicated by the watermark).
+    3. The differences and similarities between frames from different videos.
 
-    **输出格式：**
-    直接输出你的答案，无需额外解释、推理或其他文字。
+    **Output Format:**
+    Output only your answer 
 
   answer_text_only: |
     /no_think
-    /* 任务说明 */
-    你是一个面向视频问答任务的答案生成模型。
-    问题："{QUESTION}"
+    /* Task Description */
+    You are an Answer Generation model for the video question and answer task.
+    Here is a single-choice question about multiple videos.
+    Question: "{QUESTION}"
 
-    你将获得各视频的详细文本描述：
-    视频描述：
+    You are provided with detailed textual descriptions for each video:
+    Video Descriptions:
     {DESCRIPTIONS}
 
-    你的任务是根据视频描述回答问题。请关注：
-    1. 每个视频描述中的事件与细节
-    2. 描述中提到的时间戳
-    3. 基于描述的视频间差异与相似之处
+    Your task is to analyze the provided video descriptions to answer the question. Pay attention to:
+    1. The events and details described in each video description.
+    2. The timestamps mentioned in the descriptions.
+    3. The differences and similarities between videos based on their descriptions.
 
-    **输出格式：**
-    直接输出你的答案，无需额外解释、推理或其他文字。
+     **Output Format:**
+    Output only your answer 
 
   question_analysis: |
     /no_think
-    /* 任务说明 */
-    你是视频问答任务的策略分析模型。
-    问题："{QUESTION}"
+    /* Task Description */
+    You are a Strategy Analyst for the video question and answer task.
+    Here is a single-choice question about multiple videos.
+    Question: "{QUESTION}"
 
-    你的任务是分析问题，确定从视频中寻找答案的最优策略。
+    Your task is to analyze the question and options to determine the best strategy for finding the answer from the videos.
 
-    请分析以下方面：
-    1. 关键判别视觉特征或事件：模型需要寻找哪些具体视觉线索？
-    2. 区分策略：如何根据视频内容区分答案可能性？
+    Analyze the following aspects:
+    1. Key discriminative visual features or events: What specific visual clues should the agents look for?
+    2. Differentiation strategy: How can we distinguish between the provided options based on the video content?
 
-    - 策略长度控制在 30 词以内。
+    - Keep your strategy in less than 30 words.
 
-    /* 输出格式 */
-    用简洁语句总结关键视觉特征与区分方法，不要使用列表，不要直接回答问题。
+    /* Output Format */
+    Provide a concise strategy summarizing the critical visual features and differentiation approach. Do not use lists or bullet points. Do not answer the question itself.
 
-  tool_analylsis: |
-    以下是辅助问题策略。它指出需要关注的关键视觉特征，帮助你为帧分配准确的相关性分数，并选择最佳采样动作以寻找缺失的判别线索：
-    问题策略："{QUESTION_ANALYSIS}"
+  tool_analysis: |
+    Here is the auxiliary Question Strategy. It indicates the key visual features to look for, which helps you assign accurate relevance scores to frames and select the best sampling action to find missing discriminative clues:
+    Question Strategy: "{QUESTION_ANALYSIS}"
 
   desc_analysis: |
-    以下是辅助问题策略。它强调回答问题所需的关键信息，帮助你提取高相关证据并判断视频是否包含可终止检索的决定性信息：
-    问题策略："{QUESTION_ANALYSIS}"
+    Here is the auxiliary Question Strategy. It highlights what information is critical for answering the question, which helps you extract highly relevant evidence and evaluate if the video contains decisive information for termination:
+    Question Strategy: "{QUESTION_ANALYSIS}"
 
   tool_combined_action: |
     /no_think
-    /* 任务说明 */
-    你是视频问答任务的视频探索智能体。
-    问题："{QUESTION}"
+    /* Task Description */
+    You are a Video Exploration Agent for the video question and answer task.
+    Here is a single-choice question about multiple videos.
+    Question: "{QUESTION}"
 
     {TOOL_ANALYSIS}
 
-    你一次只能观看一个视频。你会收到从 {VIDEO_LABEL} 的 {START_TIME}s 至 {END_TIME}s 均匀采样的 {NUM_FRAMES} 帧。视频总时长为 {DURATION}s。
+    You can only watch one video at a time. You will receive {NUM_FRAMES} frames uniformly sampled from {VIDEO_LABEL} of {START_TIME}s to {END_TIME}s. The total duration of the video is {DURATION}s.
 
-    以下是可能有助于回答问题的额外信息，由证据提取智能体从当前 {VIDEO_LABEL}（当前视频信息）与其他视频（其他视频信息）中提取：
-    当前视频信息："{CURRENT_VIDEO_DESC}"
-    其他视频信息："{OTHER_VIDEOS_DESC}"
+    Here is the additional information that may be helpful for answering the question. It is extracted from the given {VIDEO_LABEL} (Current Video Information) and other videos (Other Videos Information) by Evidence Extraction Agents.
+    Current Video Information: "{CURRENT_VIDEO_DESC}"
+    Other Videos Information: "{OTHER_VIDEOS_DESC}"
 
-    你需要同时完成两项任务：
-    1. 对来自 {VIDEO_LABEL} {START_TIME}s–{END_TIME}s 的每一帧进行评分。
-    2. 决定下一步采样动作，在 {START_TIME}s–{END_TIME}s 范围内探索缺失线索。
+    You need to perform TWO tasks simultaneously:
+    1. Evaluate the score of each given frames from {VIDEO_LABEL} of {START_TIME}s to {END_TIME}s.
+    2. Decide the next sampling action to explore the {VIDEO_LABEL} for missing clues (only within {START_TIME}s to {END_TIME}s).
 
-    **注意：每一帧左上角标有具体时间戳（秒）。**
+    **Note: Each frame has a specific timestamp (in seconds) marked in the top-left corner.**
 
-    /* 任务1：帧评分 */
-    - 根据与当前视频信息的相关性，为每帧赋一个 0.00–1.00 的分数。示例：[0.50, 0.50, 0.50, 0.50]
-    - 1.00：帧包含对问题有用的关键、直接视觉证据
-    - 0.50：帧提供有用相关上下文，但非决定性
-    - 0.00：帧无关、模糊或冗余
+    Here are the two tasks in detail:
 
-    /* 任务2：动作决策 */
-    根据给定帧选择一个选项（1-6）。
-    **重要：选项 1-2 必须指定目标时间范围 [start, end]，示例：[1.23, 4.56]**
+    /* Task 1: Frame Scoring */
+    - Assign a score (0.00-1.00) to each given frame based on its relevance to Current Video Information. Like [0.50, 0.50, 0.50, 0.50, 0.50, 0.50, 0.50, 0.50]
+    - 1.00: The frame contains critical, direct visual evidence that is useful for the question or relevant to Current Video Information.
+    - 0.50: The frame provides useful or relevant context but is not decisive.
+    - 0.00: The frame is irrelevant, blurry, or redundant.
+
+    /* Task 2: Action Decision */
+    Choose one option (1-6) based on given frame. 
+    **Crucial: For Options 1-4, you must specify the target time(s) range [start, end] you want to explore. Like [1.23, 4.56]**
 
     1. Maybe [start, end] is useful, but other part can be also useful: Explore the middle part of the video.
     2. I think [start, end] is useful and need to further explore: Explore the middle part of the video.
-    3. do not choose this option
-    4. do not choose this option
+    3. Insufficient evidence found: Continue uniform sampling across the entire video.
+    4. Mixed results detected: Re-sample from different time regions to clarify ambiguities.
     5. I want to further observe the whole {VIDEO_LABEL} of {START_TIME}s to {END_TIME}s
     6. Terminate explore {VIDEO_LABEL} if we have sufficient information from {VIDEO_LABEL} to answer the question or {VIDEO_LABEL} appears irrelevant or useless to answer the question.
 
-    /* 输出格式 */
+    /* Output Format */
     Scores: [<space-separated list of scores for each given frame>]
     Decision: Option <number> [Range: <start>, <end>]
 
-    **注意：仅选项 1、2 需要范围，且必须在 {START_TIME}s–{END_TIME}s 内。**
+    **Note: Range is only needed for Option 1 and 2. Range should be within {START_TIME}s to {END_TIME}s.**
 
   desc_combined_action: |
     /no_think
-    /* 任务说明 */
-    你是视频问答任务的证据提取智能体。
-    问题："{QUESTION}"
+    /* Task Description */
+    You are an Evidence Extraction Agent for the video question and answer task.
+    Here is a single-choice question about multiple videos.
+    Question: "{QUESTION}"
 
-    以下是辅助问题策略，用于提取高相关证据并判断视频是否包含决定性信息：
-    问题策略："{QUESTION_ANALYSIS}"
+    Here is the auxiliary Question Strategy. It highlights what information is critical for answering the question, which helps you extract highly relevant evidence and evaluate if the video contains decisive information for termination:
+    Question Strategy: "{QUESTION_ANALYSIS}"
 
-    你一次只能查看一个视频，当前视频为 {VIDEO_LABEL}。
+    You can only watch one video at a time. The given video is {VIDEO_LABEL}.
 
     {DESC_ANALYSIS}
 
-    你需要同时完成两项任务：
-    1. 从 {VIDEO_LABEL} 中提取对回答问题有帮助的新证据，不重复已有信息。
-    2. 评估当前视频证据的置信分数并决定是否终止。
+    You need to perform two tasks simultaneously:
+    1. Extract New Evidence which is helpful for answering the given question from the given video "{VIDEO_LABEL}". Refering to "Previous Evidence" and "Other Videos Information", and do not repeat details already present in them.
+    2. Evaluate the confidence score of the Evidence of current video "{VIDEO_LABEL}" (only Previous Evidence and New Evidence) and decide termination.
 
-    /* 任务1：证据提取 */
-    - 专注于提取对 {VIDEO_LABEL} 的证据与分析，而非泛泛描述。
-    - 新证据控制在 20 词以内。
-    - 不重复“历史证据”中已有的内容。
 
-    /* 任务2：评估与终止 */
-    - 分数 (0.00-1.00)：确定证据是否充分、有用，或可判定该视频对回答问题无用
-    - 单个视频证据通常不足以回答整体问题，只要提供部分有效信息即可视为有用
-    - 若确定视频与问题无关，也可打 1.00
-    - 终止判断1（当前视频）：是否已获得足够信息，可停止探索该视频？（True/False）
-    - 终止判断2（全局任务）：综合所有视频证据，是否足以确定答案？（True/False）
+    Here are the two tasks in detail:
 
-    /* 输出格式 */
+    /* Task 1: Evidence Extraction */
+    - Focus on finding evidence, analysis for "{VIDEO_LABEL}" rather than general description. 
+    - Keep your New Evidence in less than 20 words.
+    - Do not repeat details already present in "Previous Evidence".
+
+    /* Task 2: Evaluation and Termination */
+    - Score (0.00-1.00): If you are sure that the evidence is sufficient, useful or it helps to exclude the given video for answering the question or some options (For example, the evidence "there is no...", "the video does not help..." represent that you are sure that this video is useless to answer the question). If the score is 0.00, it means that we have to further explore this video for more details.
+    - The question is about multiple videos, so the single evidence of current video is usually not enough to answer the question. If it helps to provide the part of the evidence, it is considered as useful. Score can be 1.00 even if you need to explore other videos for more details. Score can be 1.00 if you are sure that the video is not relevant to the question.
+    - Termination Check 1 (Current Video): Should we stop exploring this video? Answer True if we have sufficient evidence from it, or it appears irrelevant/low-value relative to the question! (True/False)
+    - Termination Check 2 (Global Task): Synthesizing evidence from ALL videos explored so far, can we definitively answer the question? Only answer True if:
+      a) We have found clear evidence supporting one option over others, AND
+      b) Exploring additional videos is unlikely to change the conclusion
+      In most cases, this will be False during exploration. Set to True only when highly confident in the answer.
+
+    /* Output Format */
     New Evidence: <clues extracted from the given {VIDEO_LABEL}>
     ---
     Score: <score>

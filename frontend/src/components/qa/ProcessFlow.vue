@@ -23,14 +23,11 @@
     <div class="timeline">
       <!-- 初始化阶段 -->
       <div class="timeline-stage" v-if="hasInitialization">
-        <div class="stage-header" @click="toggleStage('initialization')">
+        <div class="stage-header">
           <div class="stage-icon initialization">⚙️</div>
           <div class="stage-content">
             <div class="stage-title">初始化阶段</div>
             <div class="stage-subtitle">模型初始化与初始采样</div>
-          </div>
-          <div class="stage-toggle">
-            <span class="toggle-icon">{{ expandedStages.initialization ? '▼' : '▶' }}</span>
           </div>
         </div>
         
@@ -74,14 +71,11 @@
 
       <!-- 迭代阶段 -->
       <div class="timeline-stage" v-if="iterationLogs.length > 0">
-        <div class="stage-header" @click="toggleStage('iterations')">
+        <div class="stage-header">
           <div class="stage-icon iteration">🔄</div>
           <div class="stage-content">
             <div class="stage-title">主循环 ({{ iterationCount }} 次迭代)</div>
             <div class="stage-subtitle">智能采样与评分循环</div>
-          </div>
-          <div class="stage-toggle">
-            <span class="toggle-icon">{{ expandedStages.iterations ? '▼' : '▶' }}</span>
           </div>
         </div>
 
@@ -93,7 +87,7 @@
               v-for="(iter, idx) in groupedIterations"
               :key="'iter-' + idx"
             >
-              <div class="iteration-header" @click="toggleIteration(idx)">
+              <div class="iteration-header">
                 <div class="iteration-number">{{ iter.iteration }}</div>
                 <div class="iteration-info">
                   <span class="info-item">
@@ -102,9 +96,6 @@
                   <span class="info-item" v-if="iter.action">
                     采样位置: <strong>{{ iter.action.target_start.toFixed(1) }}s - {{ iter.action.target_end.toFixed(1) }}s</strong>
                   </span>
-                </div>
-                <div class="iteration-toggle">
-                  <span class="toggle-icon">{{ expandedIterations[idx] ? '▼' : '▶' }}</span>
                 </div>
               </div>
 
@@ -197,14 +188,11 @@
 
       <!-- 最终化阶段 -->
       <div class="timeline-stage" v-if="finalizationLogs.length > 0">
-        <div class="stage-header" @click="toggleStage('finalization')">
+        <div class="stage-header">
           <div class="stage-icon finalization">✓</div>
           <div class="stage-content">
             <div class="stage-title">最终化阶段</div>
             <div class="stage-subtitle">生成最终答案</div>
-          </div>
-          <div class="stage-toggle">
-            <span class="toggle-icon">{{ expandedStages.finalization ? '▼' : '▶' }}</span>
           </div>
         </div>
 
@@ -229,7 +217,7 @@
 </template>
 
 <script setup>
-import { defineProps, ref, computed } from 'vue'
+import { defineProps, ref, computed, onMounted, watch } from 'vue'
 
 const props = defineProps({
   processLogs: {
@@ -242,10 +230,22 @@ const props = defineProps({
 const expandedStages = ref({
   initialization: true,
   iterations: true,
-  finalization: false
+  finalization: true
 })
 
 const expandedIterations = ref({})
+
+// 初始化所有迭代项为展开状态
+const initializeExpandedIterations = () => {
+  if (props.processLogs?.iterations) {
+    props.processLogs.iterations.forEach((_, idx) => {
+      expandedIterations.value[idx] = true
+    })
+  }
+}
+
+onMounted(initializeExpandedIterations)
+watch(() => props.processLogs?.iterations?.length, initializeExpandedIterations)
 
 // Computed properties
 const hasInitialization = computed(() => {
@@ -309,15 +309,11 @@ function filterLogsByStage(stage) {
 }
 
 function toggleStage(stage) {
-  expandedStages.value[stage] = !expandedStages.value[stage]
+  // 保留函数以防后续需要，但不执行任何操作
 }
 
 function toggleIteration(idx) {
-  if (expandedIterations.value[idx] === undefined) {
-    expandedIterations.value[idx] = true
-  } else {
-    expandedIterations.value[idx] = !expandedIterations.value[idx]
-  }
+  // 保留函数以防后续需要，但不执行任何操作
 }
 
 function formatTime(timestamp) {

@@ -60,6 +60,12 @@ def get_current_user(request_data=None):
 def process_question_async(task_id, user_id, username, question, video_paths, config_path):
     """后台线程处理问题"""
     try:
+        print(f"\n{'='*60}")
+        print(f"任务启动: {task_id}")
+        print(f"用户: {user_id} ({username})")
+        print(f"问题: {question}")
+        print(f"{'='*60}\n")
+        
         # 初始化任务进度信息
         running_tasks[task_id]['progress'] = []
         # progress_queue 已在/ask路由中初始化
@@ -72,6 +78,7 @@ def process_question_async(task_id, user_id, username, question, video_paths, co
                 progress_queue.put(item)
 
         # 调用模型回答问题
+        print("正在调用模型...")
         result = ask_model(question, video_paths, config_path, progress_callback=progress_callback)
 
         # 提取回答内容 - 优先使用 predicted_answer，其次使用 answer_generation.raw_output
@@ -81,6 +88,21 @@ def process_question_async(task_id, user_id, username, question, video_paths, co
 
         # 添加 answer 字段到 model_result（方便前端读取）
         result['answer'] = answer
+        
+        print(f"模型返回的数据结构: {list(result.keys())}")
+        print(f"包含 process_logs: {'process_logs' in result}")
+        
+        # 添加进度日志（process_logs）到结果中
+        # 如果 ask_model 返回了 process_logs，使用它；否则使用收集的进度信息
+        if 'process_logs' not in result:
+            result['process_logs'] = {}
+            print("创建新的 process_logs")
+        
+        # 将进度信息添加到 process_logs（用于前端显示分析过程）
+        progress_data = running_tasks[task_id].get('progress', [])
+        if progress_data and not result['process_logs'].get('progress'):
+            result['process_logs']['progress'] = progress_data
+            print(f"添加 progress 数据: {len(progress_data)} 项")
 
         # 创建最终记录
         final_record = {
@@ -93,8 +115,13 @@ def process_question_async(task_id, user_id, username, question, video_paths, co
             'status': 'completed'  # 标记为已完成
         }
 
+        print(f"保存最终记录...")
         # 更新记录（替换临时记录）
         qa_manager.update_record(user_id, task_id, final_record)
+        print(f"✅ 任务完成: {task_id}")
+        print(f"最终数据结构: {list(final_record.keys())}")
+        print(f"model_result 包含: {list(result.keys())}")
+        print(f"{'='*60}\n")
 
         # 更新任务状态
         running_tasks[task_id]['status'] = 'completed'
@@ -102,6 +129,12 @@ def process_question_async(task_id, user_id, username, question, video_paths, co
         running_tasks[task_id]['completed_at'] = datetime.now().isoformat()
 
     except Exception as e:
+        print(f"\n❌ 任务失败: {task_id}")
+        print(f"错误: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        print(f"{'='*60}\n")
+        
         # 处理失败
         error_record = {
             'success': False,
@@ -328,11 +361,16 @@ def get_record(record_id):
         record = next((r for r in records if r.get('record_id') == record_id), None)
         
         if not record:
+            print(f"警告：记录不存在 - 用户 {uid}, record_id {record_id}")
             return jsonify({
                 "code": 404,
                 "msg": "记录不存在",
                 "data": None
             }), 404
+        
+        print(f"返回记录 {record_id}: status={record.get('status')}, "
+              f"has_answer={bool(record.get('model_result', {}).get('answer'))}, "
+              f"has_process_logs={bool(record.get('model_result', {}).get('process_logs'))}")
         
         return jsonify({
             "code": 200,
@@ -341,6 +379,7 @@ def get_record(record_id):
         })
         
     except Exception as e:
+        print(f"获取记录出错: {str(e)}")
         return jsonify({
             "code": 500,
             "msg": f"服务器错误：{str(e)}",
