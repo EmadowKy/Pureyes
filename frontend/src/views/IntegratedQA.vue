@@ -55,6 +55,92 @@
       </div>
     </transition>
 
+    <!-- 背景遮罩层 -->
+    <div v-if="viewRecordDetail && isDetailExpanded" ref="overlayRef" class="detail-overlay" :class="{ 'closing': isClosing }"></div>
+    <!-- 展开状态的悬浮窗口 -->
+    <div v-if="viewRecordDetail && isDetailExpanded" ref="popupRef" class="record-detail-panel expanded" :class="{ 'closing': isClosing }">
+      <!-- 关闭按钮 -->
+      <button @click="toggleDetailExpand" class="floating-close-button-red">
+        ×
+      </button>
+      <!-- 主内容区 -->
+      <div class="expanded-main-content">
+        <!-- 左侧：回答和视频 -->
+        <div class="expanded-left-panel">
+          <!-- 回答卡片 -->
+          <div class="content-card answer-card">
+            <div class="card-header">
+              <h2 class="card-title">
+                <el-icon><ChatLineRound /></el-icon> AI 回答
+              </h2>
+            </div>
+            <div class="card-body">
+              <div v-if="viewRecordDetail.status === 'processing'" class="processing-container">
+                <div class="processing-spinner"></div>
+                <p class="processing-text">AI 正在分析中，请稍候...</p>
+              </div>
+              <div v-else class="answer-content">
+                {{ viewRecordDetail.model_result?.answer || viewRecordDetail.model_result?.predicted_answer || '无回答' }}
+              </div>
+            </div>
+          </div>
+
+          <!-- 相关视频卡片 -->
+          <div class="content-card videos-card">
+            <div class="card-header">
+              <h2 class="card-title">
+                <el-icon><VideoPlay /></el-icon> 相关视频
+              </h2>
+            </div>
+            <div class="card-body">
+              <div class="videos-grid">
+                <div
+                  v-for="(videoPath, index) in viewRecordDetail.video_paths.filter(vp => getVideoNameByPath(vp))"
+                  :key="index"
+                  class="video-item-card"
+                >
+                  <div class="video-item-icon">
+                    <el-icon><VideoPlay /></el-icon>
+                  </div>
+                  <div class="video-item-name">{{ getVideoNameByPath(videoPath) }}</div>
+                </div>
+              </div>
+              <div v-if="getDeletedVideoCount() > 0" class="deleted-videos-alert">
+                <el-icon><Warning /></el-icon>
+                <span>还有 {{ getDeletedVideoCount() }} 个视频已被删除</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 右侧：分析过程 -->
+        <div class="expanded-right-panel">
+          <div class="content-card process-card">
+            <div class="card-header">
+              <h2 class="card-title">
+                <el-icon><Loading /></el-icon> 分析过程
+              </h2>
+            </div>
+            <div class="card-body">
+              <div v-if="!viewRecordDetail.model_result?.process_logs && viewRecordDetail.status !== 'processing'" class="empty-process">
+                <div class="empty-icon">📊</div>
+                <p>暂无分析过程信息</p>
+              </div>
+              <!-- 进行中任务显示实时流 -->
+              <RealtimeStreamProcessFlow 
+                v-if="viewRecordDetail.status === 'processing'"
+                :task-id="viewRecordDetail.record_id"
+                :token="getCurrentToken()"
+                @complete="handleStreamComplete"
+              />
+              <!-- 已完成任务显示完整过程 -->
+              <ProcessFlow v-else-if="viewRecordDetail.model_result?.process_logs" :process-logs="viewRecordDetail.model_result.process_logs" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
     <div class="main-layout">
       <!-- 左侧：视频列表面板 -->
       <aside class="video-panel">
@@ -136,28 +222,18 @@
 
       <!-- 右侧：问答区域 -->
       <section class="qa-section">
-        <!-- 记录详情视图 -->
-        <div v-if="viewRecordDetail" class="record-detail-panel" :class="{ 'expanded': isDetailExpanded }">
-          <div class="detail-header" v-if="!isDetailExpanded">
+        <!-- 记录详情视图 - 仅在非展开状态时显示 -->
+        <div v-if="viewRecordDetail && !isDetailExpanded" class="record-detail-panel">
+          <div class="detail-header">
             <el-button @click="() => { viewRecordDetail = null; relatedVideos = []; isDetailExpanded = false }" size="small" class="back-button">
               <el-icon><ArrowLeft /></el-icon> 返回列表
             </el-button>
             <h2><el-icon><ChatLineRound /></el-icon> 问答详情</h2>
           </div>
           
-          <!-- 非展开时的悬浮展开按钮 -->
-          <el-button v-if="!isDetailExpanded" @click="toggleDetailExpand" class="floating-expand-button">
-            <el-icon><ArrowLeft /></el-icon>
-          </el-button>
-          
-          <!-- 展开时的悬浮收起按钮 -->
-          <el-button v-if="isDetailExpanded" @click="toggleDetailExpand" class="floating-close-button">
-            <el-icon><ArrowRight /></el-icon>
-          </el-button>
-
-          <div class="detail-content" :class="{ 'expanded-content': isDetailExpanded }">
+          <div class="detail-content">
             <!-- 非展开状态的布局 -->
-            <div v-if="!isDetailExpanded" class="collapsed-layout">
+            <div class="collapsed-layout">
               <div class="detail-meta">
                 <span class="detail-time">{{ formatTime(viewRecordDetail.timestamp) }}</span>
                 <span v-if="viewRecordDetail.status === 'processing'" class="detail-status status-processing">
@@ -208,92 +284,17 @@
                   <el-icon><Delete /></el-icon> 删除记录
                 </el-button>
               </div>
-            </div>
-
-            <!-- 展开状态的全新布局 -->
-            <div v-else class="expanded-layout">
-              <!-- 主内容区 -->
-              <div class="expanded-main-content">
-                <!-- 左侧：回答和视频 -->
-                <div class="expanded-left-panel">
-                  <!-- 回答卡片 -->
-                  <div class="content-card answer-card">
-                    <div class="card-header">
-                      <h2 class="card-title">
-                        <el-icon><ChatLineRound /></el-icon> AI 回答
-                      </h2>
-                    </div>
-                    <div class="card-body">
-                      <div v-if="viewRecordDetail.status === 'processing'" class="processing-container">
-                        <div class="processing-spinner"></div>
-                        <p class="processing-text">AI 正在分析中，请稍候...</p>
-                      </div>
-                      <div v-else class="answer-content">
-                        {{ viewRecordDetail.model_result?.answer || viewRecordDetail.model_result?.predicted_answer || '无回答' }}
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- 相关视频卡片 -->
-                  <div class="content-card videos-card">
-                    <div class="card-header">
-                      <h2 class="card-title">
-                        <el-icon><VideoPlay /></el-icon> 相关视频
-                      </h2>
-                    </div>
-                    <div class="card-body">
-                      <div class="videos-grid">
-                        <div
-                          v-for="(videoPath, index) in viewRecordDetail.video_paths.filter(vp => getVideoNameByPath(vp))"
-                          :key="index"
-                          class="video-item-card"
-                        >
-                          <div class="video-item-icon">
-                            <el-icon><VideoPlay /></el-icon>
-                          </div>
-                          <div class="video-item-name">{{ getVideoNameByPath(videoPath) }}</div>
-                        </div>
-                      </div>
-                      <div v-if="getDeletedVideoCount() > 0" class="deleted-videos-alert">
-                        <el-icon><Warning /></el-icon>
-                        <span>还有 {{ getDeletedVideoCount() }} 个视频已被删除</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 右侧：分析过程 -->
-                <div class="expanded-right-panel">
-                  <div class="content-card process-card">
-                    <div class="card-header">
-                      <h2 class="card-title">
-                        <el-icon><Loading /></el-icon> 分析过程
-                      </h2>
-                    </div>
-                    <div class="card-body">
-                      <div v-if="!viewRecordDetail.model_result?.process_logs && viewRecordDetail.status !== 'processing'" class="empty-process">
-                        <div class="empty-icon">📊</div>
-                        <p>暂无分析过程信息</p>
-                      </div>
-                      <!-- 进行中任务显示实时流 -->
-                      <RealtimeStreamProcessFlow 
-                        v-if="viewRecordDetail.status === 'processing'"
-                        :task-id="viewRecordDetail.record_id"
-                        :token="getCurrentToken()"
-                        @complete="handleStreamComplete"
-                      />
-                      <!-- 已完成任务显示完整过程 -->
-                      <ProcessFlow v-else-if="viewRecordDetail.model_result?.process_logs" :process-logs="viewRecordDetail.model_result.process_logs" />
-                    </div>
-                  </div>
-                </div>
+              
+              <div style="position: absolute; bottom: 20px; left: 20px; right: 20px;">
+                <el-button @click="toggleDetailExpand" type="primary" size="default" style="width: 100%; padding: 14px 0; font-size: 16px;">
+                  查看详情信息
+                </el-button>
               </div>
             </div>
           </div>
         </div>
-
-        <!-- 提问和记录列表视图 -->
-        <div v-else>
+        <!-- 提问和记录列表视图 - 仅在未选择记录时显示 -->
+        <div v-if="!viewRecordDetail">
           <div class="question-panel">
             <div class="question-card">
               <div class="question-header">
@@ -753,6 +754,9 @@ const searchQuery = ref('')
 const filterStatus = ref('all')
 const questionInput = ref('')
 const isDetailExpanded = ref(false)
+const isClosing = ref(false)
+const overlayRef = ref(null)
+const popupRef = ref(null)
 
 // 获取当前用户token
 function getCurrentToken() {
@@ -816,7 +820,17 @@ async function viewRecord(record) {
 }
 
 function toggleDetailExpand() {
-  isDetailExpanded.value = !isDetailExpanded.value
+  if (isDetailExpanded.value) {
+    // 关闭时添加淡出动画
+    isClosing.value = true
+    setTimeout(() => {
+      isDetailExpanded.value = false
+      isClosing.value = false
+    }, 300)
+  } else {
+    // 打开时直接显示
+    isDetailExpanded.value = true
+  }
 }
 async function deleteRecord(recordId) {
   if (!confirm('确定要删除这条问答记录吗？')) return
@@ -1508,20 +1522,83 @@ function getDeletedVideoCount() {
 
 .record-detail-panel.expanded {
   position: fixed;
+  top: 5%;
+  left: 5%;
+  width: 90%;
+  height: 90vh;
+  max-width: none;
+  z-index: 1000;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  animation: popupFadeIn 0.3s ease-out forwards;
+  transform-origin: center;
+}
+
+.detail-overlay {
+  position: fixed;
   top: 0;
+  left: 0;
   right: 0;
   bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 100vh;
-  max-width: none;
-  z-index: 100;
-  box-shadow: none;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  z-index: 999;
+  animation: overlayFadeIn 0.3s ease-out forwards;
+}
+
+.record-detail-panel.expanded.closing {
+  animation: popupFadeOut 0.3s ease-in forwards;
+}
+
+.detail-overlay.closing {
+  animation: overlayFadeOut 0.3s ease-in forwards;
+}
+
+@keyframes overlayFadeIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes popupFadeIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes popupFadeOut {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+}
+
+@keyframes overlayFadeOut {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 .record-detail-panel.expanded::before {
-  opacity: 0.4;
-  filter: blur(20px);
+  opacity: 0.2;
+  filter: blur(10px);
 }
 
 .expand-button {
@@ -1624,6 +1701,33 @@ function getDeletedVideoCount() {
 
 .floating-close-button svg {
   font-size: 24px;
+}
+
+.floating-close-button-red {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 101;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: #ff4d4f;
+  color: white;
+  border-radius: 50%;
+  font-size: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(255, 77, 79, 0.4);
+  transition: all 0.3s ease;
+}
+
+.floating-close-button-red:hover {
+  background: #ff7875;
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(255, 77, 79, 0.5);
 }
 
 .back-button { flex-shrink: 0; }
