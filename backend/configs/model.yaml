@@ -61,9 +61,11 @@ prompts:
     2. The events and details described in each video description.
     3. The differences and similarities between videos.
 
+    When your answer involves a specific timestamp of a video (e.g., 1 minute and 23 seconds of Video 1), be sure to replace it with the following format: [video: "1",time:"01:23"]
+    
     **Output Format:**
     Output a complete, accurate and concise natural language answer.
-
+  
   answer_visual_only: |
     /no_think
     /* Task Description */
@@ -78,6 +80,8 @@ prompts:
     2. Which video each frame belongs to (indicated by the watermark).
     3. The differences and similarities between frames from different videos.
 
+    When your answer involves a specific timestamp of a video (e.g., 1 minute and 23 seconds of Video 1), be sure to replace it with the following format: [video: "1",time:"01:23"]
+    
     **Output Format:**
     Output a complete, accurate and concise natural language answer.
 
@@ -97,6 +101,8 @@ prompts:
     2. The timestamps mentioned in the descriptions.
     3. The differences and similarities between videos based on their descriptions.
 
+    When your answer involves a specific timestamp of a video (e.g., 1 minute and 23 seconds of Video 1), be sure to replace it with the following format: [video: "1",time:"01:23"]
+   
     **Output Format:**
     Output a complete, accurate and concise natural language answer.
 

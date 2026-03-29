@@ -174,7 +174,6 @@
             <div class="video-info">
               <div class="video-title" :title="video.video_name">
                 {{ video.video_name }}
-                <span v-if="isShortVideo(video.duration)" class="short-video-tag">🎬 超短</span>
               </div>
               <div class="video-path">{{ video.duration }}</div>
             </div>
@@ -218,7 +217,6 @@
             <VideoPlayer
               v-if="currentVideo"
               :src="getVideoUrl(currentVideo.video_path)"
-              :loop="isShortVideo(currentVideo.duration)"
               @loaded="handleVideoLoaded"
               @error="handleVideoError"
               @play="handleVideoPlay"
@@ -543,7 +541,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, nextTick, watch } from 'vue'
 import { marked } from 'marked'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -554,6 +552,7 @@ import { VideoPlay, Monitor, FullScreen, Close, ChatLineRound, Download, Upload,
 import ProcessFlow from '../components/qa/ProcessFlow.vue'
 import RealtimeStreamProcessFlow from '../components/qa/RealtimeStreamProcessFlow.vue'
 import VideoPlayer from '../components/common/VideoPlayer.vue'
+import { parseTimestamps, formatTimestampText, timeToSeconds, generateHTMLWithMetadata, generatePlainText } from '../utils/timestampParser.js'
 
 const router = useRouter()
 const username = ref('用户')
@@ -601,12 +600,16 @@ onMounted(() => {
 
   window.addEventListener('resize', resetZoom)
   window.addEventListener('click', handleGlobalClick)
+  
+  // 添加时间戳链接点击处理（事件委托）
+  document.addEventListener('click', handleTimestampClick, true)
 })
 
 onUnmounted(() => {
   stopPolling()
   window.removeEventListener('resize', resetZoom)
   window.removeEventListener('click', handleGlobalClick)
+  document.removeEventListener('click', handleTimestampClick, true)
 })
 
 function resetZoom() {
@@ -641,6 +644,7 @@ const uploadVideoFile = ref(null)
 const showRenameDialog = ref(false)
 const currentRenameVideo = ref(null)
 const newVideoName = ref('')
+let currentTimestamps = null  // 用于存储当前显示答案中的时间戳信息
 
 // 删除确认对话框
 const showDeleteConfirm = ref(false)
@@ -684,7 +688,7 @@ function getVideoUrl(videoPath) {
   }
 }
 
-// 视频播放事件处理 - 增强对超短视频的支持
+// 视频播放事件处理
 function handleVideoError(event) {
   console.error('视频加载错误:', event)
   const message = event?.message || event?.error?.message || '未知错误'
@@ -692,32 +696,10 @@ function handleVideoError(event) {
   ElMessage.error(`视频播放失败: ${message}`)
 }
 
-function handleVideoLoaded(event) {
-  const duration = event?.duration
-  if (duration) {
-    const isShortVideo = duration < 10
-    if (isShortVideo) {
-      console.log(`检测到超短视频 (时长: ${duration.toFixed(2)}秒)`)
-    }
-  }
-}
+function handleVideoLoaded() {}
 
 function handleVideoPlay() {
   console.log('开始播放视频')
-}
-
-// 检测是否为超短视频
-function isShortVideo(durationStr) {
-  if (!durationStr) return false
-  // duration格式为 "MM:SS"
-  const parts = durationStr.split(':')
-  if (parts.length !== 2) return false
-  
-  const minutes = parseInt(parts[0]) || 0
-  const seconds = parseInt(parts[1]) || 0
-  const totalSeconds = minutes * 60 + seconds
-  
-  return totalSeconds < 10
 }
 
 function handleFileChange(file) {
@@ -812,7 +794,123 @@ async function confirmDelete() {
   }
 }
 
-function playVideo(video) { currentVideo.value = video }
+function playVideo(video, timeSeconds = null) { 
+  currentVideo.value = video
+  // 如果指定了时间点，在视频加载后跳转
+  if (timeSeconds !== null) {
+    nextTick(() => {
+      const videoElement = document.querySelector('video')
+      if (videoElement && videoElement.duration) {
+        videoElement.currentTime = Math.max(0, Math.min(timeSeconds, videoElement.duration))
+        videoElement.play().catch(err => console.error('播放失败:', err))
+      }
+    })
+  }
+}
+
+/**
+ * 处理时间戳链接的点击事件
+ */
+function handleTimestampClick(e) {
+  const target = e.target
+  
+  // 检查是否点击了时间戳链接
+  if (!target.classList.contains('timestamp-link') && !target.closest('.timestamp-link')) {
+    return
+  }
+  
+  e.preventDefault()
+  e.stopPropagation()
+  
+  const link = target.closest('.timestamp-link')
+  if (!link) return
+  
+  const videoNumber = parseInt(link.dataset.video || link.getAttribute('data-video'))
+  const timeStr = link.dataset.time || link.getAttribute('data-time')
+  
+  if (!videoNumber || !timeStr) {
+    console.error('时间戳数据不完整')
+    return
+  }
+  
+  // 判断点击来源位置
+  const isInExpandedPanel = link.closest('.record-detail-panel.expanded')
+  const isInCollapsedPanel = link.closest('.record-detail-panel:not(.expanded)')
+  const isInRecordsList = link.closest('.record-card')
+  
+  // 在展开的悬浮窗口中：只显示提示，不支持跳转
+  if (isInExpandedPanel) {
+    ElMessage.info('请关闭悬浮窗口查看')
+    return
+  }
+  
+  // 在列表中点击时间戳，显示提示
+  if (isInRecordsList) {
+    ElMessage.info('请打开问答详情查看完整内容并跳转视频')
+    return
+  }
+  
+  // 在非展开状态的问答详情中点击时间戳，执行跳转
+  if (isInCollapsedPanel) {
+    // 获取视频列表并映射到 currentVideo
+    if (!viewRecordDetail.value || !viewRecordDetail.value.video_paths) {
+      console.error('没有视频数据')
+      return
+    }
+    
+    // 获取对应的视频 - videoNumber 是从 1 开始的，需要转换为 0-based 索引
+    const targetVideoPath = viewRecordDetail.value.video_paths[videoNumber - 1]
+    if (!targetVideoPath) {
+      console.error('找不到视频:', videoNumber)
+      return
+    }
+    
+    // 获取视频ID
+    const videoId = getVideoIdFromPath(targetVideoPath)
+    const video = videoList.value.find(v => v.video_id === videoId)
+    
+    if (!video) {
+      console.error('视频已删除')
+      ElMessage.error('该视频已被删除，无法播放')
+      return
+    }
+    
+    // 计算时间（秒数）
+    const seconds = timeToSeconds(timeStr)
+    
+    // 执行跳转
+    playVideo(video, seconds)
+    ElMessage.success(`已跳转到 ${video.video_name} 的 ${timeStr} 位置`)
+  }
+}
+
+/**
+ * 处理时间戳链接的悬停效果
+ */
+function handleTimestampHover(e) {
+  const link = e.target.closest('.timestamp-link')
+  if (!link) return
+  
+  if (e.type === 'mouseenter') {
+    link.style.color = 'var(--accent, #06b6d4)'
+    link.style.filter = 'brightness(1.2)'
+  } else if (e.type === 'mouseleave') {
+    link.style.color = 'var(--primary, #3b82f6)'
+    link.style.filter = 'none'
+  }
+}
+
+/**
+ * 为新插入的时间戳元素添加事件监听
+ */
+function attachTimestampListeners() {
+  const links = document.querySelectorAll('.timestamp-link')
+  links.forEach(link => {
+    link.addEventListener('mouseenter', handleTimestampHover)
+    link.addEventListener('mouseleave', handleTimestampHover)
+  })
+}
+
 function togglePlayerFullscreen() { isPlayerFullscreen.value = !isPlayerFullscreen.value }
 const selectedVideos = computed(() => videoList.value.filter(v => v.selected))
 
@@ -885,14 +983,75 @@ function renderMarkdown(text = '') {
     headerIds: false,
     breaks: true
   })
+  // 只移除脚本标签，保留其他 HTML 注释（用作占位符）
   return html.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, '')
 }
 
 const detailAnswerHtml = computed(() => {
   const detail = viewRecordDetail.value
   if (!detail || !detail.model_result) return ''
-  const raw = detail.model_result.answer || detail.model_result.predicted_answer || ''
-  return renderMarkdown(raw)
+  const raw = detail.model_result.predicted_answer || detail.model_result.answer || ''
+  
+  // 第1步：先在原始文本中替换时间戳为占位符（避免 Markdown 处理破坏格式）
+  const timestampRegex = /\[video:\s*"(\d+)"\s*,\s*time:\s*"([^"]+)"\]/g
+  const timestamps = []
+  let textWithPlaceholders = raw.replace(timestampRegex, (match, videoNum, timeStr) => {
+    const placeholderIndex = timestamps.length
+    timestamps.push({ videoNum, timeStr })
+    // 使用反向标记包装，让 Markdown 视为原始文本
+    return `\`__TIMESTAMP_${placeholderIndex}__\``
+  })
+  
+  // 第2步：进行 Markdown 渲染
+  let html = renderMarkdown(textWithPlaceholders)
+  
+  // 第3步：将占位符替换为实际的超链接（包含 <code> 标签包装）
+  timestamps.forEach((ts, index) => {
+    const placeholder = `<code>__TIMESTAMP_${index}__</code>`
+    const displayText = formatTimestampText(parseInt(ts.videoNum), ts.timeStr)
+    const link = `<span class="timestamp-link" data-video="${ts.videoNum}" data-time="${ts.timeStr}" style="color:var(--primary,#3b82f6);cursor:pointer;font-weight:600;transition:color 0.2s ease;">${displayText}</span>`
+    html = html.replace(placeholder, link)
+  })
+  
+  return html
+})
+
+// 悬浮窗口答案处理（只做文本替换，不支持跳转）
+const floatingAnswerHtml = computed(() => {
+  const detail = viewRecordDetail.value
+  if (!detail || !detail.model_result) return ''
+  const raw = detail.model_result.predicted_answer || detail.model_result.answer || ''
+  
+  // 先用 markdown 渲染
+  const markdownHtml = renderMarkdown(raw)
+  
+  // 从原始文本解析时间戳信息
+  const parts = parseTimestamps(raw)
+  
+  // 检查是否有时间戳
+  const hasTimestamps = parts.some(p => p.type === 'timestamp')
+  
+  if (!hasTimestamps) {
+    return markdownHtml
+  }
+  
+  // 生成纯文本（带格式化的时间戳）
+  const plainText = generatePlainText(parts)
+  
+  // 转义 HTML 并用 <pre> 显示，或重新用 markdown 渲染
+  const escapedText = plainText
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+  
+  return `<div class="answer-floating-window">${escapedText}</div>`
+})
+
+// 监听 detailAnswerHtml 变化，重新绑定时间戳元素的事件
+watch(detailAnswerHtml, () => {
+  nextTick(() => {
+    attachTimestampListeners()
+  })
 })
 
 // 获取当前用户token
@@ -1671,29 +1830,6 @@ function getOriginalVideoIndex(videoPath) {
   min-height: 300px;
 }
 .video-player { width: 100%; height: 100%; object-fit: contain; outline: none; }
-.video-player.short-video-player {
-  /* 超短视频特殊处理 */
-  animation: short-video-pulse 2s ease-in-out infinite;
-}
-@keyframes short-video-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.95; }
-}
-.short-video-tag {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 2px 8px;
-  background: linear-gradient(135deg, #ff6b6b 0%, #ff8c42 100%);
-  color: white;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: bold;
-  animation: pulse-badge 1.5s ease-in-out infinite;
-}
-@keyframes pulse-badge {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.05); opacity: 0.9; }
-}
 .empty-player { color: #999; text-align: center; }
 .empty-icon { font-size: 56px; margin-bottom: 16px; opacity: .5; }
 
@@ -3252,6 +3388,45 @@ function getOriginalVideoIndex(videoPath) {
 .delete-confirm-dialog :deep(.el-button--danger:hover) {
   box-shadow: 0 4px 16px color-mix(in srgb, var(--danger) 40%, transparent);
   transform: translateY(-2px);
+}
+
+/* 时间戳链接样式 */
+.answer-with-timestamps {
+  line-height: 1.8;
+  word-break: break-word;
+}
+
+.answer-with-timestamps .timestamp-link {
+  color: var(--primary, #3b82f6) !important;
+  cursor: pointer !important;
+  font-weight: 600 !important;
+  transition: color 0.2s ease !important;
+  text-decoration: none !important;
+}
+
+.answer-with-timestamps .timestamp-link:hover {
+  color: var(--accent, #06b6d4) !important;
+  text-decoration: underline !important;
+}
+
+.answer-floating-window {
+  line-height: 1.8;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+/* 时间戳链接在悬浮窗口中的样式（仅做提示，不支持跳转） */
+.answer-floating-window .timestamp-link {
+  color: #f97316 !important;
+  cursor: help !important;
+  font-weight: 600 !important;
+  transition: color 0.2s ease !important;
+  text-decoration: none !important;
+}
+
+.answer-floating-window .timestamp-link:hover {
+  color: #fb923c !important;
+  text-decoration: underline !important;
 }
 
 </style>

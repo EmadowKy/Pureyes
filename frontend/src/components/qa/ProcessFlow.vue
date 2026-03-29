@@ -3,7 +3,7 @@
     <!-- ==================== Header ====================  -->
     <div class="flow-header">
       <div class="header-content">
-        <h2 class="header-title">智能分析过程</h2>
+        <h2 class="header-title">分析过程</h2>
         <div class="header-stats">
           <div class="stat">
             <span class="stat-text">耗时: {{ totalDuration }}s</span>
@@ -95,10 +95,12 @@
               <div class="iteration-number">{{ idx + 1 }}</div>
               <div class="iteration-video">视频: <strong>{{ iter.selected_video }}</strong></div>
               <div class="iteration-status">
-                <span class="status-badge" v-if="iter.global_terminated">全局终止</span>
-                <span class="status-badge" v-else-if="iter.video_terminated">视频终止</span>
-                <span class="status-badge completed" v-else-if="isIterationCompleted(iter)">已完成</span>
-                <span class="status-badge active" v-else>进行中</span>
+                <span
+                  class="status-badge"
+                  :class="getIterationStatusClass(iter, idx)"
+                >
+                  {{ getIterationStatusText(iter, idx) }}
+                </span>
               </div>
             </div>
 
@@ -114,7 +116,7 @@
                     <span class="time">{{ formatTime(iter.action.target_end) }}s</span>
                   </div>
                   <div class="sampling-details">
-                    <div class="detail">选项: <strong>{{ iter.action.option }}</strong></div>
+                    <div class="detail">策略: {{ getActionOptionDescription(iter) }}</div>
                     <div class="detail" v-if="iter.action.description">
                       描述: {{ iter.action.description }}
                     </div>
@@ -247,9 +249,17 @@ const uniqueStages = computed(() => {
   return Array.from(stages)
 })
 
+const hasFinalOutput = computed(() => {
+  const hasFinalText = !!props.processLogs?.final_descriptions_str ||
+    (Array.isArray(props.processLogs?.final_descriptions) && props.processLogs.final_descriptions.length > 0)
+  const hasFinalFrames = Array.isArray(props.processLogs?.final_frame_paths) && props.processLogs.final_frame_paths.length > 0
+  const hasFinalStage = props.processLogs?.progress?.some(log => log.stage === 'finalization' || log.stage === 'answering')
+  return hasFinalText || hasFinalFrames || !!hasFinalStage
+})
+
 const isInitializationInProgress = computed(() => {
   const hasInitStage = props.processLogs?.progress?.some(log => log.stage === 'initialization')
-  return iterationCount.value === 0 && (hasInitStage || hasInitialization.value)
+  return iterationCount.value === 0 && !hasFinalOutput.value && (hasInitStage || hasInitialization.value)
 })
 
 function renderMarkdown(text = '') {
@@ -315,6 +325,64 @@ function isIterationCompleted(iter) {
   return iter.new_score !== null && iter.new_score !== undefined && 
          iter.acceleration !== null && iter.acceleration !== undefined &&
          iter.action !== null && iter.action !== undefined
+}
+
+function getActionOptionDescription(iter) {
+  const option = Number(iter?.action?.option)
+  const videoLabel = iter?.selected_video || '当前视频'
+  const start = formatTime(iter?.action?.target_start)
+  const end = formatTime(iter?.action?.target_end)
+
+  if (option === 1) {
+    return `[${start}s, ${end}s] 可能有用，但其他片段也可能有用：探索视频中间部分。`
+  }
+  if (option === 2) {
+    return `我认为 [${start}s, ${end}s] 有用且需要继续深入：探索视频中间部分。`
+  }
+  if (option === 3) {
+    return '此选项不使用。'
+  }
+  if (option === 4) {
+    return '此选项不使用。'
+  }
+  if (option === 5) {
+    return `我想进一步观察 ${videoLabel} 在 ${start}s 到 ${end}s 的完整区间。`
+  }
+  if (option === 6) {
+    return `若已从 ${videoLabel} 获得足够信息可回答问题，或该视频无关/低价值，则终止探索该视频。`
+  }
+
+  return `未知策略（Option ${iter?.action?.option ?? 'N/A'}）`
+}
+
+function hasNextIteration(idx) {
+  return idx < groupedIterations.value.length - 1
+}
+
+function getIterationStatusText(iter, idx) {
+  if (iter.global_terminated) return '模型判断全局迭代终止'
+  if (iter.video_terminated) return '模型判断本视频迭代终止'
+  if (!isIterationCompleted(iter)) return '进行中'
+
+  if (iter.action?.option === 6) return '工具选择终止（Option 6）'
+  if (typeof iter.new_score === 'number' && iter.new_score >= 0.8) return '分数高于阈值停止迭代'
+  if (typeof iter.acceleration === 'number' && iter.acceleration < 0.2) return '加速度低于阈值停止迭代'
+  if (hasNextIteration(idx)) return '继续迭代'
+
+  return '主循环结束'
+}
+
+function getIterationStatusClass(iter, idx) {
+  if (iter.global_terminated) return 'global-terminated'
+  if (iter.video_terminated) return 'video-terminated'
+  if (!isIterationCompleted(iter)) return 'active'
+
+  if (iter.action?.option === 6) return 'tool-terminated'
+  if (typeof iter.new_score === 'number' && iter.new_score >= 0.8) return 'score-terminated'
+  if (typeof iter.acceleration === 'number' && iter.acceleration < 0.2) return 'accel-terminated'
+  if (hasNextIteration(idx)) return 'continue-iter'
+
+  return 'loop-ended'
 }
 </script>
 
@@ -428,6 +496,7 @@ function isIterationCompleted(iter) {
   border-radius: 10px;
   overflow: hidden;
   transition: all 0.3s;
+  animation: fadeIn 0.4s ease-out;
 }
 
 .video-card:hover {
@@ -555,6 +624,7 @@ function isIterationCompleted(iter) {
   border-radius: 10px;
   overflow: hidden;
   transition: all 0.3s;
+  animation: fadeIn 0.5s ease-out backwards;
 }
 
 .iteration-card:hover {
@@ -607,9 +677,28 @@ function isIterationCompleted(iter) {
   border-radius: 12px;
   font-size: 11px;
   font-weight: 700;
-  background: color-mix(in srgb, var(--danger) 20%, transparent);
-  color: var(--danger);
+  background: color-mix(in srgb, var(--text-main) 10%, transparent);
+  color: var(--text-main);
   text-transform: uppercase;
+}
+
+.status-badge.global-terminated,
+.status-badge.video-terminated,
+.status-badge.tool-terminated,
+.status-badge.score-terminated,
+.status-badge.accel-terminated {
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  color: var(--primary);
+}
+
+.status-badge.continue-iter {
+  background: color-mix(in srgb, var(--success) 20%, transparent);
+  color: var(--success);
+}
+
+.status-badge.loop-ended {
+  background: color-mix(in srgb, var(--text-main) 10%, transparent);
+  color: var(--text-main);
 }
 
 .status-badge.active {
@@ -803,6 +892,7 @@ function isIterationCompleted(iter) {
   border-radius: 6px;
   background: color-mix(in srgb, var(--primary) 10%, transparent);
   color: var(--text-muted);
+  animation: fadeIn 0.4s ease-out backwards;
 }
 
 .loading-spinner {
@@ -824,6 +914,7 @@ function isIterationCompleted(iter) {
   margin-top: 20px;
   padding-top: 20px;
   border-top: 1px solid color-mix(in srgb, var(--primary) 15%, transparent);
+  animation: fadeIn 0.6s ease-out backwards;
 }
 
 .final-title {
@@ -899,6 +990,7 @@ function isIterationCompleted(iter) {
   border-radius: 8px;
   background: color-mix(in srgb, var(--primary) 12%, transparent);
   color: var(--text-muted);
+  animation: fadeIn 0.4s ease-out backwards;
 }
 
 .frame-row {
@@ -934,6 +1026,7 @@ function isIterationCompleted(iter) {
   justify-content: center;
   padding: 60px 20px;
   color: var(--text-muted);
+  animation: fadeIn 0.5s ease-out backwards;
 }
 
 .empty-text {

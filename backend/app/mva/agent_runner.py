@@ -636,6 +636,9 @@ class AgentRunner:
             v_curr['last_acceleration'] = acceleration
             v_curr['iteration_count'] += 1
             
+            # Calculate priority_after
+            priority_after = calculate_priority_score(score_new, acceleration, self.config)
+            
             if v_term:
                 v_curr['status'] = 'desc_terminated'
                 # If desc_agent terminates, force add current frames with 1.0 score
@@ -662,7 +665,8 @@ class AgentRunner:
                 'new_score': score_new,
                 'acceleration': acceleration,
                 'video_terminated': v_term,
-                'global_terminated': g_term
+                'global_terminated': g_term,
+                'priority_after': priority_after
             })
             _emit_progress('description_scoring', 'completed', f"第 {iteration_count+1} 次主循环描述与评分完成", {
                 'video': v_curr_name,
