@@ -98,11 +98,14 @@
               <div class="videos-grid">
                 <div
                   v-for="(videoPath, index) in viewRecordDetail.video_paths.filter(vp => getVideoNameByPath(vp))"
-                  :key="index"
+                  :key="getOriginalVideoIndex(videoPath)"
                   class="video-item-card"
                 >
                   <div class="video-item-icon">
                     <el-icon><VideoPlay /></el-icon>
+                  </div>
+                  <div class="video-item-header">
+                    <span class="video-number-badge">视频{{ getOriginalVideoIndex(videoPath) + 1 }}</span>
                   </div>
                   <div class="video-item-name">{{ getVideoNameByPath(videoPath) }}</div>
                 </div>
@@ -169,7 +172,10 @@
               <el-icon><VideoPlay /></el-icon>
             </div>
             <div class="video-info">
-              <div class="video-title" :title="video.video_name">{{ video.video_name }}</div>
+              <div class="video-title" :title="video.video_name">
+                {{ video.video_name }}
+                <span v-if="isShortVideo(video.duration)" class="short-video-tag">🎬 超短</span>
+              </div>
               <div class="video-path">{{ video.duration }}</div>
             </div>
             <div class="video-actions">
@@ -209,7 +215,15 @@
           </div>
 
           <div class="player-wrapper" ref="playerWrapperRef">
-            <video v-if="currentVideo" ref="videoRef" :src="getVideoUrl(currentVideo.video_path)" controls class="video-player"></video>
+            <VideoPlayer
+              v-if="currentVideo"
+              :src="getVideoUrl(currentVideo.video_path)"
+              :loop="isShortVideo(currentVideo.duration)"
+              @loaded="handleVideoLoaded"
+              @error="handleVideoError"
+              @play="handleVideoPlay"
+              class="video-player"
+            />
             <div v-else class="empty-player">
               <el-icon class="empty-icon"><Monitor /></el-icon>
               <p>请在左侧选择视频播放</p>
@@ -266,9 +280,10 @@
                 <div class="video-list">
                   <span
                     v-for="(videoPath, index) in viewRecordDetail.video_paths.filter(vp => getVideoNameByPath(vp))"
-                    :key="index"
+                    :key="getOriginalVideoIndex(videoPath)"
                     class="video-tag"
                   >
+                    <span class="video-tag-badge">视频{{ getOriginalVideoIndex(videoPath) + 1 }}</span>
                     {{ getVideoNameByPath(videoPath) }}
                   </span>
                 </div>
@@ -538,6 +553,7 @@ import { getAuthInfo } from '../api/auth'
 import { VideoPlay, Monitor, FullScreen, Close, ChatLineRound, Download, Upload, ArrowLeft, ArrowRight, Warning, Loading } from '@element-plus/icons-vue'
 import ProcessFlow from '../components/qa/ProcessFlow.vue'
 import RealtimeStreamProcessFlow from '../components/qa/RealtimeStreamProcessFlow.vue'
+import VideoPlayer from '../components/common/VideoPlayer.vue'
 
 const router = useRouter()
 const username = ref('用户')
@@ -617,7 +633,6 @@ function showNotificationBanner(message, type = 'success') {
 /* 视频管理 */
 const videoList = ref([])
 const currentVideo = ref(null)
-const videoRef = ref(null)
 const isPlayerFullscreen = ref(false)
 const playerWrapperRef = ref(null)
 const showUploadDialog = ref(false)
@@ -668,6 +683,43 @@ function getVideoUrl(videoPath) {
     return `/api/video/uploads/${filename}`
   }
 }
+
+// 视频播放事件处理 - 增强对超短视频的支持
+function handleVideoError(event) {
+  console.error('视频加载错误:', event)
+  const message = event?.message || event?.error?.message || '未知错误'
+  console.error(`视频播放失败: ${message}`)
+  ElMessage.error(`视频播放失败: ${message}`)
+}
+
+function handleVideoLoaded(event) {
+  const duration = event?.duration
+  if (duration) {
+    const isShortVideo = duration < 10
+    if (isShortVideo) {
+      console.log(`检测到超短视频 (时长: ${duration.toFixed(2)}秒)`)
+    }
+  }
+}
+
+function handleVideoPlay() {
+  console.log('开始播放视频')
+}
+
+// 检测是否为超短视频
+function isShortVideo(durationStr) {
+  if (!durationStr) return false
+  // duration格式为 "MM:SS"
+  const parts = durationStr.split(':')
+  if (parts.length !== 2) return false
+  
+  const minutes = parseInt(parts[0]) || 0
+  const seconds = parseInt(parts[1]) || 0
+  const totalSeconds = minutes * 60 + seconds
+  
+  return totalSeconds < 10
+}
+
 function handleFileChange(file) {
   if (file) {
     const MAX_FILE_SIZE = 500 * 1024 * 1024 // 500MB
@@ -1068,6 +1120,12 @@ function getDeletedVideoCount() {
     console.error('计算被删除视频数量时出错:', error)
     return 0
   }
+}
+
+// 获取视频在原始 video_paths 数组中的索引
+function getOriginalVideoIndex(videoPath) {
+  if (!viewRecordDetail.value || !viewRecordDetail.value.video_paths) return -1
+  return viewRecordDetail.value.video_paths.indexOf(videoPath)
 }
 </script>
 
@@ -1613,6 +1671,29 @@ function getDeletedVideoCount() {
   min-height: 300px;
 }
 .video-player { width: 100%; height: 100%; object-fit: contain; outline: none; }
+.video-player.short-video-player {
+  /* 超短视频特殊处理 */
+  animation: short-video-pulse 2s ease-in-out infinite;
+}
+@keyframes short-video-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.95; }
+}
+.short-video-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  background: linear-gradient(135deg, #ff6b6b 0%, #ff8c42 100%);
+  color: white;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  animation: pulse-badge 1.5s ease-in-out infinite;
+}
+@keyframes pulse-badge {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.9; }
+}
 .empty-player { color: #999; text-align: center; }
 .empty-icon { font-size: 56px; margin-bottom: 16px; opacity: .5; }
 
@@ -2777,6 +2858,45 @@ function getDeletedVideoCount() {
   font-weight: 500;
   color: var(--text-main);
   line-height: 1.4;
+}
+
+.video-item-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  width: 100%;
+  justify-content: center;
+}
+
+.video-number-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  background: linear-gradient(135deg, var(--primary), color-mix(in srgb, var(--primary) 80%, var(--accent)));
+  color: white;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.video-tag-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  background: var(--primary);
+  color: white;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-right: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* 删除视频警告 */
