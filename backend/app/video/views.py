@@ -1,6 +1,7 @@
 import os
 import uuid
 import cv2
+import yaml
 from flask import request
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from datetime import datetime
@@ -8,6 +9,7 @@ from datetime import datetime
 from app.core.db import db
 from app.core.config import Config
 from app.core.response import success, fail
+from app.models.user import User
 
 class Video(db.Model):
     __tablename__ = "video"
@@ -17,6 +19,7 @@ class Video(db.Model):
     video_path = db.Column(db.String)
     upload_time = db.Column(db.DateTime, default = datetime.now)
     duration = db.Column(db.Float, default = 0.0)  # 视频时长，单位秒
+    file_size = db.Column(db.BigInteger, default = 0)  # 视频文件大小，单位字节
     is_ticked = db.Column(db.Boolean, default = False)
     
     def to_dict(self):
@@ -31,15 +34,37 @@ class Video(db.Model):
             "uid": self.uid,
             "video_name": self.video_name,
             "video_path": relative_video_path,
-            "duration": duration_str
+            "duration": duration_str,
+            "file_size": self.file_size  # 返回文件大小
         }
 
 # 视频存储路径
 VIDEO_PATH = Config.VIDEO_UPLOAD_PATH
 os.makedirs(VIDEO_PATH, exist_ok = True)
 
+# 加载视频配置
+def load_video_config():
+    """加载视频上传限制配置"""
+    config_path = os.path.join(os.path.dirname(Config.VIDEO_UPLOAD_PATH), 'configs', 'qa_storage.yaml')
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+            video_config = config.get('video', {})
+            return {
+                'max_single_video_size': video_config.get('max_single_video_size', 524288000),  # 默认500MB
+                'max_storage_per_user': video_config.get('max_storage_per_user', 2147483648),  # 默认2GB
+                'max_videos_per_user': video_config.get('max_videos_per_user', 30)  # 默认30个
+            }
+    except Exception as e:
+        print(f"加载视频配置失败: {str(e)}")
+        # 返回默认配置
+        return {
+            'max_single_video_size': 524288000,
+            'max_storage_per_user': 2147483648,
+            'max_videos_per_user': 30
+        }
 
-# 统一鉴权：所有视频操作应使用 JWT。使用装饰器和 get_jwt_identity()/get_jwt() 获取用户信息。
+VIDEO_CONFIG = load_video_config()
 
 
 
@@ -62,9 +87,44 @@ def upload_video():
         return fail(code=400, msg="缺少视频文件")
 
     try:
+        # 获取用户信息
+        user = User.query.filter_by(id=int(uid)).first()
+        if not user:
+            return fail(code=404, msg="用户不存在")
+        
+        # 获取文件大小
+        video_file.seek(0, 2)  # 移动到文件结尾
+        file_size = video_file.tell()
+        video_file.seek(0)  # 重置到文件开头
+        
+        # 【验证1】检查单个视频大小限制
+        if file_size > VIDEO_CONFIG['max_single_video_size']:
+            max_size_mb = VIDEO_CONFIG['max_single_video_size'] / (1024 * 1024)
+            current_size_mb = file_size / (1024 * 1024)
+            return fail(
+                code=400, 
+                msg=f"视频文件过大。最大允许大小: {max_size_mb:.0f}MB，当前大小: {current_size_mb:.2f}MB"
+            )
+        
+        # 【验证2】检查用户视频数量限制
+        video_count = Video.query.filter_by(uid=uid).count()
+        if video_count >= VIDEO_CONFIG['max_videos_per_user']:
+            return fail(
+                code=400,
+                msg=f"您已达到上传数量限制（{VIDEO_CONFIG['max_videos_per_user']}个）。请删除部分视频后再试。"
+            )
+        
+        # 【验证3】检查用户总存储限制
+        if user.total_video_size + file_size > VIDEO_CONFIG['max_storage_per_user']:
+            max_storage_gb = VIDEO_CONFIG['max_storage_per_user'] / (1024 * 1024 * 1024)
+            current_usage_gb = user.total_video_size / (1024 * 1024 * 1024)
+            remaining_gb = (VIDEO_CONFIG['max_storage_per_user'] - user.total_video_size) / (1024 * 1024 * 1024)
+            return fail(
+                code=400,
+                msg=f"存储空间不足。总限制: {max_storage_gb:.2f}GB，已用: {current_usage_gb:.2f}GB，剩余: {remaining_gb:.2f}GB，无法上传 {file_size / (1024 * 1024):.2f}MB 的视频"
+            )
+        
         video_id = str(uuid.uuid4()).replace("-", "")[:32]
-        # uuid.uuid4()生成一个随机的UUID对象，str()将其转换为字符串，replace("-", "")去掉其中的连字符，[:32]取前32个字符作为video_id。
-        # 只使用video_id作为文件名，不包含视频名称，这样路径不会随名称变化
         video_filename = f"{video_id}.mp4" 
         full_video_path = os.path.join(VIDEO_PATH, video_filename)
 
@@ -88,24 +148,26 @@ def upload_video():
 
         duration = get_video_duration(full_video_path)
 
-        # 不存储 video_path 到数据库，运行时动态生成
-        # 这样避免了路径格式转换的复杂性
-
-        #写入数据库
+        # 写入数据库
         video = Video(
             video_id = video_id,
             uid = uid,
             video_name = video_name,
-            video_path = None,  # 不依赖数据库的路径字段，运行时从 video_id 生成
-            duration = duration
+            video_path = None,
+            duration = duration,
+            file_size = file_size  # 保存文件大小
         )
-        db.session.add(video) # 将新创建的视频对象添加到数据库会话中，准备进行数据库操作。
-        db.session.commit() # 提交数据库会话，将更改保存到数据库中。
+        
+        # 更新用户统计信息
+        user.total_video_size += file_size
+        user.video_count += 1
+        
+        db.session.add(video)
+        db.session.commit()
         return success(data = video.to_dict(), msg = "视频上传成功")
     except Exception as e:
-        db.session.rollback() # 回滚数据库会话，撤销未提交的更改。
+        db.session.rollback()
         return fail(code=500, msg=f"视频上传失败：{str(e)}")
-        # code=500表示服务器内部错误
 
 # 删除视频
 @jwt_required()
@@ -134,6 +196,12 @@ def delete_video():
                 os.remove(absolute_video_path)
             except Exception as file_e:
                 return fail(code=500, msg=f"视频文件删除失败：{str(file_e)}")
+        
+        # 获取用户并更新统计信息
+        user = User.query.filter_by(id=int(uid)).first()
+        if user:
+            user.total_video_size = max(0, user.total_video_size - video.file_size)
+            user.video_count = max(0, user.video_count - 1)
         
         # 删除数据库记录
         db.session.delete(video)

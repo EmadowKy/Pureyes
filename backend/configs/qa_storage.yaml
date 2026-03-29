@@ -11,3 +11,14 @@ storage:
   
   # 备份目录
   backup_dir: "output/qa_backups"
+
+# Video Upload Configuration
+video:
+  # 单个视频最大大小限制 (字节)：500MB = 516710400 bytes
+  max_single_video_size: 524288000
+  
+  # 每个用户最大总存储大小 (字节)：2GB = 2147483648 bytes
+  max_storage_per_user: 2147483648
+  
+  # 每个用户最多上传视频数
+  max_videos_per_user: 30

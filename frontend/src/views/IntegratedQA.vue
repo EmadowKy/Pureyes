@@ -19,7 +19,6 @@
           >
             {{ themeMode === 'light' ? '🌙' : '☀️' }}
           </button>
-
           <button
             class="dot violet"
             :class="{ active: themeColor === 'violet' }"
@@ -48,7 +47,12 @@
     <transition name="slide-down">
       <div v-if="showNotification" class="notification-banner" :class="notificationType">
         <div class="notification-content">
-          <span class="notification-icon">{{ notificationType === 'success' ? '✅' : '⚠️' }}</span>
+          <span class="notification-icon" v-if="notificationType === 'success'">
+            <i class="ri-check-line"></i>
+          </span>
+          <span class="notification-icon" v-else>
+            <i class="ri-alert-line"></i>
+          </span>
           <span class="notification-message">{{ notificationMessage }}</span>
         </div>
         <button @click="showNotification = false" class="notification-close">×</button>
@@ -121,7 +125,7 @@
             </div>
             <div class="card-body">
               <div v-if="!viewRecordDetail.model_result?.process_logs && viewRecordDetail.status !== 'processing'" class="empty-process">
-                <div class="empty-icon">📊</div>
+                <div class="empty-icon"><i class="ri-bar-chart-line"></i></div>
                 <p>暂无分析过程信息</p>
               </div>
               <!-- 进行中任务显示实时流 -->
@@ -171,10 +175,10 @@
             <div class="video-actions">
               <el-checkbox v-model="video.selected" class="video-checkbox" @click.stop></el-checkbox>
               <el-button size="small" @click.stop="handleRenameVideo(video)" title="重命名视频">
-                <el-icon><Edit /></el-icon>
+                <i class="ri-file-edit-line"></i>
               </el-button>
               <el-button size="small" type="danger" @click.stop="handleDeleteVideo(video)" title="删除视频">
-                <el-icon><Delete /></el-icon>
+                <i class="ri-delete-bin-line"></i>
               </el-button>
             </div>
           </div>
@@ -201,10 +205,6 @@
               <span>{{ currentVideo ? currentVideo.name : '请选择视频' }}</span>
             </div>
             <div class="player-actions">
-              <el-button @click="togglePlayerFullscreen" circle size="small" title="全屏">
-                <el-icon v-if="!isPlayerFullscreen"><FullScreen /></el-icon>
-                <el-icon v-else><Close /></el-icon>
-              </el-button>
             </div>
           </div>
 
@@ -221,9 +221,9 @@
       <!-- 右侧：问答区域 -->
       <section class="qa-section">
         <!-- 记录详情视图 - 仅在非展开状态时显示 -->
-        <div v-if="viewRecordDetail && !isDetailExpanded" class="record-detail-panel">
+        <div v-if="viewRecordDetail && !isDetailExpanded" class="record-detail-panel" :class="{ 'closing': isDetailClosing }">
           <div class="detail-header">
-            <el-button @click="() => { viewRecordDetail = null; relatedVideos = []; isDetailExpanded = false }" size="small" class="back-button">
+            <el-button @click="closeDetailPanel()" size="small" class="back-button">
               <el-icon><ArrowLeft /></el-icon> 返回列表
             </el-button>
             <h2><el-icon><ChatLineRound /></el-icon> 问答详情</h2>
@@ -279,7 +279,7 @@
 
               <div class="detail-actions">
                 <el-button @click="deleteRecord(viewRecordDetail.record_id)" type="danger" size="small">
-                  <el-icon><Delete /></el-icon> 删除记录
+                  <i class="ri-delete-bin-line"></i> 删除记录
                 </el-button>
               </div>
 
@@ -342,16 +342,6 @@
               </div>
             </div>
 
-            <div class="search-bar">
-              <input v-model="searchQuery" placeholder="搜索问题或答案..." class="search-input" @input="handleSearch" />
-              <select v-model="filterStatus" class="filter-select" @change="handleFilter">
-                <option value="all">全部状态</option>
-                <option value="processing">进行中</option>
-                <option value="success">成功</option>
-                <option value="failure">失败</option>
-              </select>
-            </div>
-
             <div class="records-list" ref="recordsListRef">
               <div v-if="loading" class="loading-state">
                 <div class="spinner"></div>
@@ -359,7 +349,7 @@
               </div>
 
               <div v-else-if="records.length === 0" class="empty-state">
-                <div class="empty-icon">💬</div>
+                <div class="empty-icon"><i class="ri-chat-3-line"></i></div>
                 <p>暂无问答记录</p>
                 <p>请在上方提问面板输入问题并选择视频开始问答</p>
               </div>
@@ -372,7 +362,8 @@
                   :class="{
                     'record-processing': record.status === 'processing',
                     'record-failure': record.status === 'failed' || record.success === false,
-                    'record-success': record.status === 'completed' && record.success !== false
+                    'record-success': record.status === 'completed' && record.success !== false,
+                    'record-active': viewRecordDetail?.record_id === record.record_id
                   }"
                   @click="viewRecord(record)"
                 >
@@ -390,7 +381,9 @@
                       </span>
                     </div>
                     <div class="record-actions">
-                      <button @click.stop="deleteRecord(record.record_id)" class="btn-icon" title="删除">🗑</button>
+                      <button @click.stop="deleteRecord(record.record_id)" class="btn-icon" title="删除">
+                        <i class="ri-delete-bin-line"></i>
+                      </button>
                     </div>
                   </div>
 
@@ -442,6 +435,16 @@
     <!-- 上传对话框 -->
     <el-dialog v-model="showUploadDialog" title="上传视频" width="500px">
       <div class="upload-form">
+        <el-alert type="info" :closable="false" style="margin-bottom: 16px">
+          <template #default>
+            <div style="font-size: 12px; line-height: 1.6;">
+              <div>📋 上传限制：</div>
+              <div>• 单个视频最大 500MB</div>
+              <div>• 每个账户最多 30 个视频</div>
+              <div>• 每个账户总存储 2GB</div>
+            </div>
+          </template>
+        </el-alert>
         <el-form label-width="80px">
           <el-form-item label="视频名称">
             <el-input v-model="uploadVideoName" placeholder="请输入视频名称" />
@@ -450,10 +453,10 @@
             <el-upload class="upload-demo" action="" :auto-upload="false" :on-change="handleFileChange" :show-file-list="false">
               <el-button size="small" type="primary">选择文件</el-button>
               <template #tip>
-                <div class="el-upload__tip">请选择 MP4 格式的视频文件</div>
+                <div class="el-upload__tip">请选择 MP4 格式的视频文件，最大 500MB</div>
               </template>
             </el-upload>
-            <div v-if="uploadVideoFile" class="file-info">已选择: {{ uploadVideoFile.name }}</div>
+            <div v-if="uploadVideoFile" class="file-info">已选择: {{ uploadVideoFile.name }} ({{ (uploadVideoFile.size / (1024 * 1024)).toFixed(2) }}MB)</div>
           </el-form-item>
         </el-form>
       </div>
@@ -485,6 +488,33 @@
       </template>
     </el-dialog>
 
+    <!-- 删除确认对话框 -->
+    <el-dialog 
+      v-model="showDeleteConfirm" 
+      :title="deleteConfirmData.title" 
+      width="420px"
+      align-center
+      class="delete-confirm-dialog"
+    >
+      <div class="delete-confirm-content">
+        <div class="delete-icon">
+          <i class="ri-alert-circle-line"></i>
+        </div>
+        <div class="delete-text">
+          <p class="delete-message">{{ deleteConfirmData.message }}</p>
+          <p class="delete-warning" v-if="deleteConfirmData.warning">{{ deleteConfirmData.warning }}</p>
+        </div>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="showDeleteConfirm = false">取消</el-button>
+          <el-button type="danger" @click="confirmDelete" :loading="deleteConfirmLoading">
+            {{ deleteConfirmData.confirmText || '确定删除' }}
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
+
     <!-- 鼠标点击特效层 -->
     <div class="click-layer">
       <span
@@ -505,7 +535,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { qaApi } from '../api/qa'
 import { videoApi } from '../api/video'
 import { getAuthInfo } from '../api/auth'
-import { VideoPlay, Monitor, FullScreen, Close, ChatLineRound, Download, Upload, Delete, Edit, ArrowLeft, ArrowRight, Warning, Loading } from '@element-plus/icons-vue'
+import { VideoPlay, Monitor, FullScreen, Close, ChatLineRound, Download, Upload, ArrowLeft, ArrowRight, Warning, Loading } from '@element-plus/icons-vue'
 import ProcessFlow from '../components/qa/ProcessFlow.vue'
 import RealtimeStreamProcessFlow from '../components/qa/RealtimeStreamProcessFlow.vue'
 
@@ -597,6 +627,18 @@ const showRenameDialog = ref(false)
 const currentRenameVideo = ref(null)
 const newVideoName = ref('')
 
+// 删除确认对话框
+const showDeleteConfirm = ref(false)
+const deleteConfirmLoading = ref(false)
+const deleteConfirmData = reactive({
+  title: '删除确认',
+  message: '',
+  warning: '',
+  confirmText: '确定删除',
+  type: 'video', // 'video' 或 'record'
+  targetId: null
+})
+
 async function loadVideos() {
   try {
     const response = await videoApi.getVideoList()
@@ -628,6 +670,14 @@ function getVideoUrl(videoPath) {
 }
 function handleFileChange(file) {
   if (file) {
+    const MAX_FILE_SIZE = 500 * 1024 * 1024 // 500MB
+    
+    if (file.raw.size > MAX_FILE_SIZE) {
+      ElMessage.error(`文件大小超过限制。最大允许 500MB，当前文件大小：${(file.raw.size / (1024 * 1024)).toFixed(2)}MB`)
+      uploadVideoFile.value = null
+      return
+    }
+    
     uploadVideoFile.value = file.raw
     if (!uploadVideoName.value) uploadVideoName.value = file.name.replace(/\.[^/.]+$/, "")
   }
@@ -650,24 +700,14 @@ async function handleUploadVideo() {
   }
 }
 async function handleDeleteVideo(video) {
-  try {
-    await ElMessageBox.confirm(`确定要删除视频 "${video.video_name}" 吗？`, '删除视频', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'warning'
-    })
-    await videoApi.deleteVideo(video.video_id)
-    ElMessage.success('视频删除成功')
-    await loadVideos()
-    if (currentVideo.value && currentVideo.value.video_id === video.video_id) {
-      currentVideo.value = videoList.value.length > 0 ? videoList.value[0] : null
-    }
-  } catch (error) {
-    if (error !== 'cancel') {
-      console.error('视频删除失败:', error)
-      ElMessage.error('视频删除失败')
-    }
-  }
+  deleteConfirmData.title = '删除视频'
+  deleteConfirmData.message = `确定要删除视频 "${video.video_name}" 吗？`
+  deleteConfirmData.warning = '删除后将无法恢复'
+  deleteConfirmData.confirmText = '确定删除'
+  deleteConfirmData.type = 'video'
+  deleteConfirmData.targetId = video.video_id
+  deleteConfirmData.video = video
+  showDeleteConfirm.value = true
 }
 function handleRenameVideo(video) {
   currentRenameVideo.value = video
@@ -692,6 +732,34 @@ async function handleRenameSubmit() {
     ElMessage.error('视频重命名失败')
   }
 }
+
+async function confirmDelete() {
+  try {
+    deleteConfirmLoading.value = true
+    if (deleteConfirmData.type === 'video') {
+      await videoApi.deleteVideo(deleteConfirmData.targetId)
+      ElMessage.success('视频删除成功')
+      await loadVideos()
+      if (currentVideo.value && currentVideo.value.video_id === deleteConfirmData.targetId) {
+        currentVideo.value = videoList.value.length > 0 ? videoList.value[0] : null
+      }
+    } else if (deleteConfirmData.type === 'record') {
+      await qaApi.deleteRecord(deleteConfirmData.targetId)
+      showNotificationBanner('删除成功', 'success')
+      await loadStats()
+      await loadRecords()
+      // 删除成功后关闭问答详情
+      closeDetailPanel()
+    }
+    showDeleteConfirm.value = false
+  } catch (error) {
+    console.error('删除失败:', error)
+    ElMessage.error('删除失败')
+  } finally {
+    deleteConfirmLoading.value = false
+  }
+}
+
 function playVideo(video) { currentVideo.value = video }
 function togglePlayerFullscreen() { isPlayerFullscreen.value = !isPlayerFullscreen.value }
 const selectedVideos = computed(() => videoList.value.filter(v => v.selected))
@@ -754,6 +822,7 @@ const filterStatus = ref('all')
 const questionInput = ref('')
 const isDetailExpanded = ref(false)
 const isClosing = ref(false)
+const isDetailClosing = ref(false)
 const overlayRef = ref(null)
 const popupRef = ref(null)
 
@@ -848,17 +917,25 @@ function toggleDetailExpand() {
     isDetailExpanded.value = true
   }
 }
+
+function closeDetailPanel() {
+  // 添加卡片的退出动画
+  isDetailClosing.value = true
+  setTimeout(() => {
+    viewRecordDetail.value = null
+    relatedVideos.value = []
+    isDetailExpanded.value = false
+    isDetailClosing.value = false
+  }, 250)
+}
 async function deleteRecord(recordId) {
-  if (!confirm('确定要删除这条问答记录吗？')) return
-  try {
-    await qaApi.deleteRecord(recordId)
-    showNotificationBanner('删除成功', 'success')
-    await loadStats()
-    await loadRecords()
-  } catch (error) {
-    console.error('删除失败:', error)
-    showNotificationBanner('删除失败：' + error.message, 'error')
-  }
+  deleteConfirmData.title = '删除问答记录'
+  deleteConfirmData.message = '此操作将永久删除该问答记录'
+  deleteConfirmData.warning = '删除后将无法恢复，请谨慎操作'
+  deleteConfirmData.confirmText = '确定删除'
+  deleteConfirmData.type = 'record'
+  deleteConfirmData.targetId = recordId
+  showDeleteConfirm.value = true
 }
 async function submitQuestion() {
   if (!questionInput.value.trim() || selectedVideos.value.length === 0) {
@@ -1039,87 +1116,187 @@ function getDeletedVideoCount() {
 
 .theme-btn {
   border: 1px solid rgba(255,255,255,.35);
-  background: rgba(255,255,255,.2);
+  background: rgba(255,255,255,.12);
   color: #fff;
-  border-radius: 10px;
-  padding: 6px 10px;
+  border-radius: 12px;
+  padding: 8px 12px;
   cursor: pointer;
-  transition: all .2s;
+  transition: all .22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
-.theme-btn:hover { transform: translateY(-1px); background: rgba(255,255,255,.28); }
+
+.theme-btn:hover { 
+  transform: translateY(-2px) scale(1.05);
+  background: rgba(255,255,255,.22);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  border-color: rgba(255,255,255,.5);
+}
+
+.theme-btn:active {
+  transform: translateY(0) scale(1);
+}
 
 .dot {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   border: 2px solid rgba(255,255,255,.86);
   cursor: pointer;
-  transition: transform .18s ease, box-shadow .18s ease;
+  transition: transform .2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow .2s ease, filter .2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
-.dot:hover { transform: scale(1.08); }
-.dot.active { box-shadow: 0 0 0 3px rgba(255,255,255,.28); }
+
+.dot:hover { 
+  transform: scale(1.12);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  filter: brightness(1.1);
+}
+
+.dot.active { 
+  box-shadow: 0 0 0 4px rgba(255,255,255,.35);
+  transform: scale(1.05);
+}
 
 .dot.violet { background: linear-gradient(135deg,#6d5bff,#ff4da6); }
 .dot.teal { background: linear-gradient(135deg,#06b6d4,#10b981); }
 .dot.rose { background: linear-gradient(135deg,#e11d48,#fb7185); }
 
 .btn-profile {
-  padding: 8px 18px;
+  padding: 10px 20px;
   color: white;
-  border-radius: 8px;
+  border-radius: 10px;
   font-weight: 600;
   cursor: pointer;
   font-size: 14px;
   backdrop-filter: blur(8px);
-  background: rgba(255,255,255,.18);
-  border: 1px solid rgba(255,255,255,.35);
-  transition: all .2s;
+  background: linear-gradient(135deg, rgba(255,255,255,.22), rgba(255,255,255,.12));
+  border: 1px solid rgba(255,255,255,.4);
+  transition: all .22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
 }
-.btn-profile:hover { transform: translateY(-2px); background: rgba(255,255,255,.26); }
+
+.btn-profile::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,.2), transparent);
+  opacity: 0;
+  transition: opacity .22s ease;
+}
+
+.btn-profile:hover { 
+  transform: translateY(-3px);
+  background: linear-gradient(135deg, rgba(255,255,255,.32), rgba(255,255,255,.22));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  border-color: rgba(255,255,255,.6);
+}
+
+.btn-profile:hover::before {
+  opacity: 1;
+}
+
+.btn-profile:active {
+  transform: translateY(-1px);
+}
 
 .notification-banner {
   position: fixed;
-  top: 20px;
+  top: 24px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 1001;
-  padding: 14px 20px;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0,0,0,.14);
+  padding: 16px 24px;
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  min-width: 300px;
-  max-width: 640px;
-  backdrop-filter: blur(8px);
+  gap: 16px;
+  min-width: 320px;
+  max-width: 680px;
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  animation: notificationSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+
 .notification-banner.success {
-  background: rgba(34,197,94,.12);
-  border: 1px solid rgba(34,197,94,.35);
+  background: linear-gradient(135deg, rgba(34,197,94,.15), rgba(34,197,94,.08));
+  border: 1px solid rgba(34,197,94,.4);
   color: #15803d;
 }
+
 .notification-banner.error {
-  background: rgba(239,68,68,.12);
-  border: 1px solid rgba(239,68,68,.35);
+  background: linear-gradient(135deg, rgba(239,68,68,.15), rgba(239,68,68,.08));
+  border: 1px solid rgba(239,68,68,.4);
   color: #dc2626;
 }
-.notification-content { display: flex; align-items: center; gap: 12px; flex: 1; }
-.notification-icon { font-size: 20px; }
-.notification-message { font-size: 14px; font-weight: 500; }
+
+.notification-content { 
+  display: flex; 
+  align-items: center; 
+  gap: 12px; 
+  flex: 1; 
+}
+
+.notification-icon { 
+  font-size: 22px;
+  animation: notificationIconBounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.notification-message { 
+  font-size: 14px; 
+  font-weight: 500;
+  line-height: 1.4;
+}
+
 .notification-close {
   padding: 4px 8px;
   border: none;
   background: transparent;
   font-size: 20px;
   cursor: pointer;
-  opacity: .6;
+  opacity: .7;
+  transition: all .2s ease;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.notification-close:hover { opacity: 1; }
 
-.slide-down-enter-active, .slide-down-leave-active { transition: all .3s ease; }
+.notification-close:hover { 
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.08);
+}
+
+@keyframes notificationSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes notificationIconBounce {
+  0% { transform: scale(0.3); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+.slide-down-enter-active, .slide-down-leave-active { 
+  transition: all .35s cubic-bezier(0.34, 1.56, 0.64, 1); 
+}
+
 .slide-down-enter-from, .slide-down-leave-to {
-  transform: translateX(-50%) translateY(-100%);
+  transform: translateX(-50%) translateY(-120px);
   opacity: 0;
 }
 
@@ -1239,7 +1416,53 @@ function getDeletedVideoCount() {
 .panel-desc { margin: 0; font-size: 13px; color: var(--text-muted); }
 .btn-upload { align-self: flex-start; }
 
-.video-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.video-actions { 
+  display: flex; 
+  align-items: center; 
+  gap: 10px; 
+  flex-shrink: 0; 
+}
+
+.video-actions :deep(.el-button--default) {
+  border-radius: 8px !important;
+  padding: 6px 12px !important;
+  border: 1.5px solid color-mix(in srgb, var(--text-main) 15%, transparent) !important;
+  background: white !important;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.video-actions :deep(.el-button--default:hover) {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%) !important;
+  color: white !important;
+  border: none !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--primary) 24%, transparent) !important;
+}
+
+.video-actions :deep(.el-button--default:active) {
+  transform: translateY(0) !important;
+}
+
+.video-actions :deep(.el-button--danger) {
+  border-radius: 8px !important;
+  padding: 6px 12px !important;
+  border: 1.5px solid color-mix(in srgb, #ef4444 35%, transparent) !important;
+  background: white !important;
+  color: #ef4444 !important;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.video-actions :deep(.el-button--danger:hover) {
+  background: linear-gradient(135deg, #ef4444 0%, #f87171 100%) !important;
+  color: white !important;
+  border: none !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 6px 16px color-mix(in srgb, #ef4444 28%, transparent) !important;
+}
+
+.video-actions :deep(.el-button--danger:active) {
+  transform: translateY(0) !important;
+}
 .upload-form { padding: 20px 0; }
 
 .file-info,
@@ -1308,10 +1531,48 @@ function getDeletedVideoCount() {
 .video-path {
   font-size: 11px;
   color: var(--text-muted);
-  font-family: 'Courier New', monospace;
+  font-family: 'Fira Code', 'Courier New', monospace;
   word-break: break-all;
 }
-.video-checkbox { flex-shrink: 0; }
+.video-checkbox { 
+  flex-shrink: 0;
+}
+
+.video-checkbox :deep(.el-checkbox__input) {
+  border-radius: 6px !important;
+  width: 24px !important;
+  height: 24px !important;
+}
+
+.video-checkbox :deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%) !important;
+  border-color: var(--primary) !important;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 32%, transparent) !important;
+}
+
+.video-checkbox :deep(.el-checkbox__inner) {
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 4px !important;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.video-checkbox :deep(.el-checkbox__inner::after) {
+  box-sizing: content-box;
+  width: 6px !important;
+  height: 10px !important;
+  left: ８px !important;
+  top: 8px !important;
+  border-width: 2px !important;
+  border-color: white;
+  border-right-width: 2.5px !important;
+  border-bottom-width: 2.5px !important;
+}
+
+.video-checkbox :deep(.el-checkbox:hover .el-checkbox__input.is-checked .el-checkbox__inner) {
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 36%, transparent) !important;
+  transform: scale(1.05);
+}
 
 .video-stats {
   display: flex;
@@ -1369,31 +1630,30 @@ function getDeletedVideoCount() {
 .stats-bar .stat-item.success .stat-value { color: #16a34a; }
 .stats-bar .stat-item.failure .stat-value { color: #dc2626; }
 .stats-bar .stat-item.processing .stat-value { color: var(--primary); }
-.stats-bar .stat-actions { margin-left: auto; }
+.stats-bar .stat-actions { 
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
-.search-bar { display: flex; gap: 12px; padding: 16px 20px; border-bottom: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent); }
-.search-input {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid color-mix(in srgb, var(--text-main) 16%, transparent);
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  color: var(--text-main);
-  background: color-mix(in srgb, var(--bg-card) 86%, transparent);
+.stat-actions :deep(.el-button--default) {
+  border-radius: 10px !important;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%) !important;
+  color: white !important;
+  border: none !important;
+  padding: 8px 16px !important;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 28%, transparent) !important;
 }
-.search-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 12%, transparent);
+
+.stat-actions :deep(.el-button--default:hover) {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--primary) 32%, transparent) !important;
 }
-.filter-select {
-  padding: 8px 12px;
-  border: 1px solid color-mix(in srgb, var(--text-main) 16%, transparent);
-  border-radius: 8px;
-  font-size: 14px;
-  background: color-mix(in srgb, var(--bg-card) 86%, transparent);
-  color: var(--text-main);
-  cursor: pointer;
+
+.stat-actions :deep(.el-button--default:active) {
+  transform: translateY(0) !important;
 }
 
 .records-list { flex: 1; overflow-y: auto; padding: 20px; }
@@ -1402,41 +1662,164 @@ function getDeletedVideoCount() {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 60px 20px;
+  gap: 12px;
+  padding: 80px 40px;
   color: var(--text-muted);
+  animation: emptyStateFadeIn 0.35s ease;
 }
+
+@keyframes emptyStateFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid color-mix(in srgb, var(--text-main) 15%, transparent);
+  width: 48px;
+  height: 48px;
+  border: 4px solid color-mix(in srgb, var(--text-main) 10%, transparent);
   border-top: 4px solid var(--primary);
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: spin 1.2s linear infinite;
 }
-@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-.records-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 16px; }
+@keyframes spin { 
+  0% { transform: rotate(0deg); } 
+  100% { transform: rotate(360deg); } 
+}
+
+.loading-state p {
+  font-size: 14px;
+  margin: 8px 0 0 0;
+}
+
+.empty-state .empty-icon { 
+  font-size: 64px; 
+  margin-bottom: 16px;
+  opacity: 0.6;
+  animation: emptyIconFloat 3s ease-in-out infinite;
+}
+
+@keyframes emptyIconFloat {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-12px); }
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.empty-state p:first-of-type {
+  font-size: 16px;
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.empty-state p:last-of-type {
+  font-size: 13px;
+  margin-top: 4px;
+  opacity: 0.8;
+}
+
+.records-grid { 
+  display: grid; 
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); 
+  gap: 18px;
+  animation: recordsGridFadeIn 0.3s ease;
+}
+
+@keyframes recordsGridFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
 .record-card {
-  background: color-mix(in srgb, var(--bg-card) 95%, transparent);
-  border-radius: 12px;
+  background: color-mix(in srgb, var(--bg-card) 98%, transparent);
+  border-radius: 14px;
   padding: 16px;
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--text-main) 10%, transparent);
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--text-main) 8%, transparent);
   border-left: 5px solid color-mix(in srgb, var(--text-main) 18%, transparent);
-  transition: all .22s ease;
-}
-.record-card:hover {
-  box-shadow: 0 12px 28px color-mix(in srgb, var(--primary) 16%, transparent);
-  transform: translateY(-3px);
+  transition: all .28s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  overflow: hidden;
   cursor: pointer;
 }
+
+.record-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, 
+    color-mix(in srgb, var(--primary) 0%, transparent),
+    color-mix(in srgb, var(--accent) 0%, transparent)
+  );
+  opacity: 0;
+  transition: opacity .28s ease;
+  pointer-events: none;
+}
+
+.record-card:hover {
+  box-shadow: 0 16px 40px color-mix(in srgb, var(--primary) 20%, transparent);
+  transform: translateY(-6px);
+  border-left-width: 6px;
+}
+
+.record-card:hover::before {
+  opacity: 0.03;
+}
+
+.record-card.record-active {
+  background: linear-gradient(135deg, 
+    color-mix(in srgb, var(--primary) 12%, transparent),
+    color-mix(in srgb, var(--accent) 8%, transparent)
+  );
+  box-shadow: 0 12px 32px color-mix(in srgb, var(--primary) 24%, transparent);
+  border-left-width: 6px;
+  border-left-color: var(--primary);
+  animation: cardPulseIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.record-card.record-active::before {
+  opacity: 0.06;
+}
+
 .record-card.record-processing {
   border-left-color: var(--primary);
-  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
 }
-.record-card.record-success { border-left-color: var(--success); }
-.record-card.record-failure { border-left-color: var(--danger); }
+
+.record-card.record-processing:hover {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.record-card.record-success { 
+  border-left-color: var(--success);
+}
+
+.record-card.record-success:hover {
+  background: color-mix(in srgb, var(--success) 6%, transparent);
+}
+
+.record-card.record-failure { 
+  border-left-color: var(--danger);
+}
+
+.record-card.record-failure:hover {
+  background: color-mix(in srgb, var(--danger) 6%, transparent);
+}
 
 .record-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .record-meta { display: flex; align-items: center; gap: 8px; }
@@ -1466,23 +1849,71 @@ function getDeletedVideoCount() {
   50% { opacity: .5; transform: scale(1.2); }
 }
 
-.record-actions { display: flex; gap: 4px; }
+.record-actions { 
+  display: flex; 
+  gap: 6px; 
+  align-items: center;
+}
+
 .btn-icon {
-  padding: 4px 8px;
+  padding: 6px 8px;
   border: none;
   background: transparent;
   cursor: pointer;
-  border-radius: 4px;
-  font-size: 14px;
+  border-radius: 6px;
+  font-size: 16px;
+  transition: all .2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
 }
-.btn-icon:hover { background: color-mix(in srgb, var(--text-main) 8%, transparent); }
 
-.record-content { margin-bottom: 12px; }
-.record-question, .record-answer { margin-bottom: 8px; line-height: 1.5; }
-.label { font-weight: bold; color: var(--text-main); margin-right: 4px; }
-.text { color: color-mix(in srgb, var(--text-main) 78%, #fff 22%); font-size: 14px; }
+.btn-icon:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+  opacity: 1;
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
+}
 
-.answer-text { display: block; max-height: 60px; overflow: hidden; text-overflow: ellipsis; }
+.record-content { 
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.record-question, .record-answer { 
+  margin-bottom: 10px; 
+  line-height: 1.5;
+}
+
+.label { 
+  font-weight: 600;
+  color: var(--text-main); 
+  margin-right: 6px;
+  display: inline;
+  min-width: 20px;
+}
+
+.text { 
+  color: color-mix(in srgb, var(--text-main) 72%, #fff 28%); 
+  font-size: 14px;
+  word-break: break-word;
+}
+
+.record-question .text {
+  color: var(--text-main);
+  font-weight: 500;
+}
+
+.answer-text { 
+  display: block; 
+  max-height: 64px; 
+  overflow: hidden; 
+  text-overflow: ellipsis;
+  line-height: 1.5;
+  word-break: break-word;
+}
 .processing-text { display: flex; align-items: center; gap: 8px; color: var(--primary); font-style: italic; }
 .spinner-small {
   width: 14px;
@@ -1497,22 +1928,64 @@ function getDeletedVideoCount() {
   border-top: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent);
   padding-top: 12px;
 }
-.video-tags { display: flex; flex-wrap: wrap; gap: 8px; }
-.video-tag {
-  padding: 4px 10px;
-  background: color-mix(in srgb, var(--primary) 12%, transparent);
-  color: var(--primary);
-  border-radius: 12px;
-  font-size: 11px;
-  border: 1px solid color-mix(in srgb, var(--primary) 26%, transparent);
+.video-tags { 
+  display: flex; 
+  flex-wrap: wrap; 
+  gap: 8px;
 }
-.deleted-tag {
-  padding: 4px 10px;
-  background: rgba(239,68,68,.12);
-  color: #e11d48;
-  border-radius: 12px;
-  font-size: 11px;
+
+.video-tag {
+  padding: 6px 12px;
+  background: linear-gradient(135deg, 
+    color-mix(in srgb, var(--primary) 14%, transparent),
+    color-mix(in srgb, var(--primary) 8%, transparent)
+  );
+  color: var(--primary);
+  border-radius: 14px;
+  font-size: 12px;
+  border: 1px solid color-mix(in srgb, var(--primary) 28%, transparent);
+  transition: all .2s cubic-bezier(0.34, 1.56, 0.64, 1);
   font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.video-tag:hover {
+  background: linear-gradient(135deg, 
+    color-mix(in srgb, var(--primary) 20%, transparent),
+    color-mix(in srgb, var(--primary) 14%, transparent)
+  );
+  border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
+.deleted-tag {
+  padding: 6px 12px;
+  background: linear-gradient(135deg, 
+    rgba(239,68,68,.14),
+    rgba(239,68,68,.08)
+  );
+  color: #dc2626;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid rgba(239,68,68,.28);
+  transition: all .2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.deleted-tag:hover {
+  background: linear-gradient(135deg, 
+    rgba(239,68,68,.2),
+    rgba(239,68,68,.14)
+  );
+  border-color: #dc2626;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(239,68,68,.16);
 }
 
 .pagination {
@@ -1520,11 +1993,60 @@ function getDeletedVideoCount() {
   justify-content: center;
   align-items: center;
   gap: 16px;
-  padding: 16px;
+  padding: 24px 20px;
   border-top: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent);
-  background: color-mix(in srgb, var(--bg-card) 70%, #eef2ff 30%);
+  background: linear-gradient(135deg, 
+    color-mix(in srgb, var(--primary) 6%, transparent),
+    color-mix(in srgb, var(--accent) 3%, transparent)
+  );
 }
-.page-info { color: var(--text-muted); font-size: 13px; }
+
+.page-info { 
+  color: var(--text-muted); 
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 160px;
+  text-align: center;
+  letter-spacing: 0.3px;
+}
+
+:deep(.pagination .el-button) {
+  border-radius: 10px !important;
+  padding: 8px 20px !important;
+  font-weight: 600;
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+:deep(.pagination .el-button--default) {
+  color: var(--text-main) !important;
+  background: white !important;
+  border: 1px solid color-mix(in srgb, var(--text-main) 12%, transparent) !important;
+}
+
+:deep(.pagination .el-button--default:hover:not(:disabled)) {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%) !important;
+  color: white !important;
+  border: none !important;
+  transform: translateY(-3px) !important;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--primary) 28%, transparent) !important;
+}
+
+:deep(.pagination .el-button--default:active:not(:disabled)) {
+  transform: translateY(-1px) !important;
+}
+
+:deep(.pagination .el-button.is-disabled) {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+:deep(.pagination .el-button.is-disabled:hover) {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+  background: white !important;
+  border: 1px solid color-mix(in srgb, var(--text-main) 12%, transparent) !important;
+}
 
 .record-detail-panel {
   display: flex;
@@ -1534,6 +2056,11 @@ function getDeletedVideoCount() {
   transition: all 0.3s ease;
   position: relative;
   z-index: 10;
+  animation: panelSlideIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.record-detail-panel.closing {
+  animation: panelSlideOut 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
 .record-detail-panel.expanded {
@@ -1548,7 +2075,7 @@ function getDeletedVideoCount() {
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  animation: popupFadeIn 0.3s ease-out forwards;
+  animation: popupFadeIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   transform-origin: center;
 }
 
@@ -1561,34 +2088,41 @@ function getDeletedVideoCount() {
   background: rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(10px);
   z-index: 999;
-  animation: overlayFadeIn 0.3s ease-out forwards;
+  animation: overlayFadeIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
 .record-detail-panel.expanded.closing {
-  animation: popupFadeOut 0.3s ease-in forwards;
+  animation: popupFadeOut 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
 .detail-overlay.closing {
-  animation: overlayFadeOut 0.3s ease-in forwards;
+  animation: overlayFadeOut 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
 @keyframes overlayFadeIn {
   0% {
     opacity: 0;
+    backdrop-filter: blur(0px);
   }
   100% {
     opacity: 1;
+    backdrop-filter: blur(10px);
   }
 }
 
 @keyframes popupFadeIn {
   0% {
     opacity: 0;
-    transform: scale(0.9) translateY(20px);
+    transform: scale(0.85) translateY(30px);
+    filter: blur(4px);
+  }
+  50% {
+    filter: blur(2px);
   }
   100% {
     opacity: 1;
     transform: scale(1) translateY(0);
+    filter: blur(0px);
   }
 }
 
@@ -1596,19 +2130,90 @@ function getDeletedVideoCount() {
   0% {
     opacity: 1;
     transform: scale(1) translateY(0);
+    filter: blur(0px);
+  }
+  50% {
+    filter: blur(2px);
   }
   100% {
     opacity: 0;
-    transform: scale(0.9) translateY(20px);
+    transform: scale(0.85) translateY(30px);
+    filter: blur(4px);
   }
 }
 
 @keyframes overlayFadeOut {
   0% {
     opacity: 1;
+    backdrop-filter: blur(10px);
   }
   100% {
     opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+}
+
+@keyframes cardPulseIn {
+  0% {
+    background: color-mix(in srgb, var(--bg-card) 98%, transparent);
+    box-shadow: 0 2px 12px color-mix(in srgb, var(--text-main) 8%, transparent);
+    border-left-width: 5px;
+  }
+  50% {
+    box-shadow: 0 16px 40px color-mix(in srgb, var(--primary) 28%, transparent);
+  }
+  100% {
+    background: linear-gradient(135deg, 
+      color-mix(in srgb, var(--primary) 12%, transparent),
+      color-mix(in srgb, var(--accent) 8%, transparent)
+    );
+    box-shadow: 0 12px 32px color-mix(in srgb, var(--primary) 24%, transparent);
+    border-left-width: 6px;
+  }
+}
+
+@keyframes cardPulseOut {
+  0% {
+    background: linear-gradient(135deg, 
+      color-mix(in srgb, var(--primary) 12%, transparent),
+      color-mix(in srgb, var(--accent) 8%, transparent)
+    );
+    box-shadow: 0 12px 32px color-mix(in srgb, var(--primary) 24%, transparent);
+    border-left-width: 6px;
+  }
+  50% {
+    box-shadow: 0 16px 40px color-mix(in srgb, var(--primary) 28%, transparent);
+  }
+  100% {
+    background: color-mix(in srgb, var(--bg-card) 98%, transparent);
+    box-shadow: 0 2px 12px color-mix(in srgb, var(--text-main) 8%, transparent);
+    border-left-width: 5px;
+  }
+}
+
+@keyframes panelSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateX(30px);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+    filter: blur(0px);
+  }
+}
+
+@keyframes panelSlideOut {
+  0% {
+    opacity: 1;
+    transform: translateX(0);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(30px);
+    filter: blur(4px);
   }
 }
 
@@ -1746,7 +2351,26 @@ function getDeletedVideoCount() {
   box-shadow: 0 6px 16px rgba(255, 77, 79, 0.5);
 }
 
-.back-button { flex-shrink: 0; }
+.back-button {
+  flex-shrink: 0 !important;
+  border-radius: 10px !important;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%) !important;
+  color: white !important;
+  border: none !important;
+  padding: 10px 18px !important;
+  font-weight: 600;
+  transition: all 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  box-shadow: 0 4px 15px color-mix(in srgb, var(--primary) 32%, transparent) !important;
+}
+
+.back-button:hover:not(:disabled) {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--primary) 36%, transparent) !important;
+}
+
+.back-button:active:not(:disabled) {
+  transform: translateY(-1px) !important;
+}
 .detail-header h2 {
   margin: 0;
   font-size: 18px;
@@ -2106,7 +2730,7 @@ function getDeletedVideoCount() {
   background: color-mix(in srgb, var(--text-main) 10%, transparent);
   padding: 2px 4px;
   border-radius: 4px;
-  font-family: 'Consolas', monospace;
+  font-family: 'Fira Code', 'Consolas', monospace;
 }
 
 /* 视频网格 */
@@ -2410,4 +3034,104 @@ function getDeletedVideoCount() {
   .player-section, .records-panel, .record-detail-panel { min-height: 300px; }
   .detail-content { padding: 16px; }
 }
+
+/* 删除确认对话框 */
+.delete-confirm-dialog :deep(.el-dialog__header) {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
+  border-bottom: none;
+  padding: 20px;
+}
+
+.delete-confirm-dialog :deep(.el-dialog__title) {
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.delete-confirm-dialog :deep(.el-dialog__close) {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.delete-confirm-dialog :deep(.el-dialog__close:hover) {
+  color: white;
+}
+
+.delete-confirm-content {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 24px 0;
+}
+
+.delete-icon {
+  font-size: 48px;
+  color: var(--danger);
+  flex-shrink: 0;
+  animation: deleteIconPulse 2s infinite;
+}
+
+@keyframes deleteIconPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+.delete-text {
+  flex: 1;
+}
+
+.delete-message {
+  margin: 0 0 8px 0;
+  color: var(--text-main);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.delete-warning {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  border-left: 2px solid var(--danger);
+  border-radius: 4px;
+}
+
+.delete-confirm-dialog :deep(.el-dialog__footer) {
+  border-top: 1px solid var(--border-soft);
+  padding: 16px 24px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.delete-confirm-dialog :deep(.el-button) {
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.delete-confirm-dialog :deep(.el-button--default) {
+  border-color: var(--border-soft);
+  color: var(--text-muted);
+}
+
+.delete-confirm-dialog :deep(.el-button--default:hover) {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 5%, transparent);
+}
+
+.delete-confirm-dialog :deep(.el-button--danger) {
+  background: linear-gradient(135deg, var(--danger) 0%, #dc2626 100%);
+  border: none;
+  color: white;
+}
+
+.delete-confirm-dialog :deep(.el-button--danger:hover) {
+  box-shadow: 0 4px 16px color-mix(in srgb, var(--danger) 40%, transparent);
+  transform: translateY(-2px);
+}
+
 </style>

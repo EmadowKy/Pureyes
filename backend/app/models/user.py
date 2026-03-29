@@ -11,6 +11,10 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False, default="user")  # user/admin
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    
+    # 视频存储统计
+    total_video_size = db.Column(db.BigInteger, default=0, nullable=False)  # 用户已使用的总存储大小（字节）
+    video_count = db.Column(db.Integer, default=0, nullable=False)  # 用户已上传的视频数量
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

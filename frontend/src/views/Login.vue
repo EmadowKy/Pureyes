@@ -6,13 +6,7 @@
       <div class="bg-decor decor-3"></div>
 
       <div class="brand-content">
-        <h1>🎯 Pureyes</h1>
-        <p class="subtitle">智能视频问答系统</p>
-        <div class="features">
-          <div class="feature-item"><span class="icon">🎬</span><span>视频智能分析</span></div>
-          <div class="feature-item"><span class="icon">💬</span><span>AI 问答交互</span></div>
-          <div class="feature-item"><span class="icon">⚡</span><span>实时响应</span></div>
-        </div>
+        <h1>Pureyes</h1>
       </div>
     </div>
 
@@ -29,7 +23,9 @@
         <p class="login-desc">请使用您的账号密码登录系统</p>
 
         <transition name="fade-slide">
-          <div v-if="errorMsg" class="error-message">⚠️ {{ errorMsg }}</div>
+          <div v-if="errorMsg" class="error-message">
+            <i class="ri-alert-line"></i> {{ errorMsg }}
+          </div>
         </transition>
 
         <div class="form-group">
@@ -46,7 +42,9 @@
           {{ loading ? '登录中...' : '登 录' }}
         </button>
 
-        <div class="login-tips"><p>💡 提示：使用已注册的账号和密码登录</p></div>
+        <div class="login-tips"><p>
+          <i class="ri-lightbulb-line"></i> 提示：使用已注册的账号和密码登录
+        </p></div>
         <div class="register-link"><p>还没有账号？<router-link to="/register">立即注册</router-link></p></div>
       </div>
     </div>

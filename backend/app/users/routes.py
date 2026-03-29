@@ -31,7 +31,9 @@ def me():
             "username": user.username,
             "email": user.email,
             "role": user.role,
-            "is_active": user.is_active
+            "is_active": user.is_active,
+            "total_video_size": user.total_video_size,  # 用户已使用的总存储（字节）
+            "video_count": user.video_count  # 用户已上传的视频数
         }
     )
 

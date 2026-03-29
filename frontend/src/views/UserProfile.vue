@@ -5,7 +5,6 @@
     <div class="profile-header">
       <div>
         <h2>用户个人中心</h2>
-        <p>查看并更新您的基本信息，与系统中已登录账号保持一致。</p>
       </div>
       <div class="header-actions">
         <div class="theme-tools">
@@ -25,39 +24,84 @@
         <span>正在加载用户信息...</span>
       </div>
 
-      <div v-else>
-        <el-form :model="form" label-width="120px" label-position="left" status-icon>
-          <el-form-item label="用户名" prop="username">
-            <el-input v-model="form.username" disabled></el-input>
-          </el-form-item>
+      <div v-else class="profile-content">
+        <div class="profile-left">
+          <div class="user-info-section">
+            <div class="user-info-item">
+              <div class="info-label">用户ID</div>
+              <div class="info-value" style="font-family: 'Courier New', monospace; letter-spacing: 1px;">{{ form.uid }}</div>
+            </div>
 
-          <el-form-item label="邮箱" prop="email">
-            <el-input v-model="form.email" disabled></el-input>
-          </el-form-item>
+            <div class="user-info-item">
+              <div class="info-label">用户名</div>
+              <div class="info-value">{{ form.username }}</div>
+            </div>
 
-          <el-form-item label="角色" prop="role">
-            <el-input v-model="form.role" disabled></el-input>
-          </el-form-item>
+            <div class="user-info-item">
+              <div class="info-label">邮箱</div>
+              <div class="info-value">{{ form.email || '未设置' }}</div>
+            </div>
 
-          <el-form-item label="激活状态" prop="is_active">
-            <el-tag :type="form.is_active ? 'success' : 'danger'">
-              {{ form.is_active ? '已激活' : '未激活' }}
-            </el-tag>
-          </el-form-item>
+            <div class="user-info-item">
+              <div class="info-label">角色</div>
+              <div class="info-value">{{ form.role }}</div>
+            </div>
+          </div>
 
-          <el-form-item label="QA 昵称" prop="qa_username">
-            <el-input v-model="form.qa_username" placeholder="用于智能问答的用户名"></el-input>
-          </el-form-item>
+          <transition name="fade-slide">
+            <div v-if="errorMsg" class="profile-error">
+              <i class="ri-alert-line"></i> {{ errorMsg }}
+            </div>
+          </transition>
+        </div>
 
-          <el-form-item>
-            <el-button type="primary" :loading="saving" @click="saveProfile">保存</el-button>
-            <el-button @click="resetProfile">重置</el-button>
-          </el-form-item>
-        </el-form>
+        <div class="profile-right">
+          <div class="limits-panel">
+            <div class="limits-title">使用限制</div>
+            
+            <div class="limit-item">
+              <div class="limit-header">
+                <span class="limit-label">视频数量</span>
+                <span class="limit-value">{{ form.video_count }}/30</span>
+              </div>
+              <el-progress 
+                :percentage="(form.video_count / 30) * 100" 
+                :status="form.video_count >= 30 ? 'exception' : (form.video_count >= 20 ? 'warning' : 'success')"
+                :striped="true"
+              />
+              <div class="limit-info">{{ form.video_count >= 30 ? '已达上限' : `还可上传 ${30 - form.video_count} 个` }}</div>
+            </div>
 
-        <transition name="fade-slide">
-          <div v-if="errorMsg" class="profile-error">⚠️ {{ errorMsg }}</div>
-        </transition>
+            <div class="limit-item">
+              <div class="limit-header">
+                <span class="limit-label">存储空间</span>
+                <span class="limit-value">{{ formatSize(form.total_video_size) }}/2GB</span>
+              </div>
+              <el-progress 
+                :percentage="(form.total_video_size / 2147483648) * 100" 
+                :status="form.total_video_size >= 2147483648 * 0.9 ? 'exception' : (form.total_video_size >= 2147483648 * 0.75 ? 'warning' : 'success')"
+                :striped="true"
+              />
+              <div class="limit-info">{{ formatRemainingSpace }}</div>
+            </div>
+
+            <div class="limit-item">
+              <div class="limit-header">
+                <span class="limit-label">单个视频最大</span>
+                <span class="limit-value">500MB</span>
+              </div>
+              <div class="limit-info">MP4 格式视频文件</div>
+            </div>
+
+            <div class="limit-item">
+              <div class="limit-header">
+                <span class="limit-label">问答记录最多</span>
+                <span class="limit-value">100条</span>
+              </div>
+              <div class="limit-info">已按时间保留最新记录</div>
+            </div>
+          </div>
+        </div>
       </div>
     </el-card>
 
@@ -68,7 +112,7 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, reactive, ref } from 'vue'
+import { onMounted, onUnmounted, reactive, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getCurrentUser } from '../api/user'
@@ -77,15 +121,15 @@ import { logout, clearAuthInfo } from '../api/auth'
 const router = useRouter()
 
 const loading = ref(false)
-const saving = ref(false)
 const errorMsg = ref('')
 
 const form = reactive({
+  uid: '',
   username: '',
   email: '',
   role: '',
-  is_active: false,
-  qa_username: ''
+  video_count: 0,
+  total_video_size: 0
 })
 
 const themeMode = ref(localStorage.getItem('theme_mode') || 'light')
@@ -114,11 +158,12 @@ async function loadUser() {
     const response = await getCurrentUser()
     if (response && (response.code === 0 || response.code === 200)) {
       const data = response.data || response
+      form.uid = data.uid || ''
       form.username = data.username || ''
       form.email = data.email || ''
       form.role = data.role || 'user'
-      form.is_active = data.is_active || false
-      form.qa_username = localStorage.getItem('qa_username') || data.username || ''
+      form.video_count = data.video_count || 0
+      form.total_video_size = data.total_video_size || 0
     } else {
       errorMsg.value = response?.message || '未能获取用户信息'
     }
@@ -130,41 +175,23 @@ async function loadUser() {
   }
 }
 
-function validateForm() {
-  if (!form.qa_username || !form.qa_username.trim()) {
-    errorMsg.value = 'QA 昵称不能为空'
-    return false
-  }
-  if (form.qa_username.length < 2) {
-    errorMsg.value = 'QA 昵称至少 2 个字符'
-    return false
-  }
-  return true
+
+
+function formatSize(bytes) {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return (bytes / Math.pow(k, i)).toFixed(2) + ' ' + sizes[i]
 }
 
-function saveProfile() {
-  if (!validateForm()) return
+const formatRemainingSpace = computed(() => {
+  const MAX_STORAGE = 2147483648 // 2GB
+  const remaining = MAX_STORAGE - form.total_video_size
+  if (remaining <= 0) return '已满'
+  return `还可上传 ${formatSize(remaining)}`
+})
 
-  saving.value = true
-  errorMsg.value = ''
-
-  try {
-    localStorage.setItem('qa_username', form.qa_username.trim())
-    const userInfo = JSON.parse(localStorage.getItem('user_info') || '{}')
-    if (userInfo && typeof userInfo === 'object') {
-      userInfo.username = form.username || userInfo.username
-      localStorage.setItem('user_info', JSON.stringify(userInfo))
-    }
-    ElMessage.success('个人信息已保存')
-  } catch (error) {
-    console.error('保存失败', error)
-    errorMsg.value = error?.message || '个人信息保存失败'
-  } finally {
-    saving.value = false
-  }
-}
-
-function resetProfile() { loadUser() }
 function goToQA() { router.push('/qa') }
 
 async function handleLogout() {
@@ -193,8 +220,8 @@ onUnmounted(() => {
 
 <style scoped>
 .profile-container {
-  width: 100vw; min-height: 100vh; padding: 24px 32px; display: flex; flex-direction: column; gap: 20px;
-  position: relative; overflow: hidden; color: var(--text-main);
+  width: 100%; min-height: 100vh; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px;
+  position: relative; overflow: auto; color: var(--text-main);
   background:
     radial-gradient(1200px 600px at 10% 0%, color-mix(in srgb, var(--primary) 12%, transparent) 0%, transparent 50%),
     radial-gradient(1000px 500px at 90% 10%, color-mix(in srgb, var(--accent) 10%, transparent) 0%, transparent 45%),
@@ -212,7 +239,7 @@ onUnmounted(() => {
 
 .profile-header {
   display: flex; justify-content: space-between; align-items: center; gap: 16px;
-  background: var(--bg-card); border-radius: 14px; padding: 16px 20px; box-shadow: var(--shadow);
+  background: var(--bg-card); border-radius: 14px; padding: 20px 24px; box-shadow: var(--shadow);
   border: 1px solid var(--border-soft); backdrop-filter: blur(6px);
 }
 .profile-header h2 { margin: 0; font-size: 24px; color: var(--text-main); font-weight: 700; }
@@ -234,7 +261,7 @@ onUnmounted(() => {
 .dot.rose { background: linear-gradient(135deg,#e11d48,#fb7185); }
 
 .profile-card {
-  flex: 1; width: 100%; max-width: 760px; background: var(--bg-card) !important; border-radius: 16px !important; padding: 20px;
+  flex: 1; width: 100%; background: var(--bg-card) !important; border-radius: 16px !important; padding: 24px;
   box-shadow: var(--shadow) !important; border: 1px solid var(--border-soft); backdrop-filter: blur(8px);
 }
 .loading-block { display: flex; align-items: center; gap: 10px; padding: 30px; color: var(--text-muted); justify-content: center; }
@@ -251,9 +278,58 @@ onUnmounted(() => {
 .fade-slide-enter-active, .fade-slide-leave-active { transition: all .25s ease; }
 .fade-slide-enter-from, .fade-slide-leave-to { opacity: 0; transform: translateY(-6px); }
 
-:deep(.el-card__body) { padding: 10px 8px 4px 8px; }
+:deep(.el-card__body) { padding: 0; }
 :deep(.el-form-item__label) { color: var(--text-main); font-weight: 600; }
 
+:deep(.el-form-item) { margin-bottom: 18px; }
+
+.user-info-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.user-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  background: linear-gradient(135deg, 
+    color-mix(in srgb, var(--primary) 6%, var(--bg-page)), 
+    color-mix(in srgb, var(--accent) 4%, var(--bg-page))
+  );
+  border: 1px solid color-mix(in srgb, var(--border-soft) 60%, transparent);
+  border-radius: 12px;
+  backdrop-filter: blur(6px);
+  transition: all .3s ease;
+}
+
+.user-info-item:hover {
+  border-color: color-mix(in srgb, var(--primary) 40%, transparent);
+  background: linear-gradient(135deg, 
+    color-mix(in srgb, var(--primary) 10%, var(--bg-page)), 
+    color-mix(in srgb, var(--accent) 8%, var(--bg-page))
+  );
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.info-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.info-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-main);
+  word-break: break-all;
+}
+
+:deep(.el-form-item) { margin-bottom: 18px; }
 :deep(.el-input__wrapper) {
   border-radius: 10px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--text-main) 14%, transparent) inset;
   transition: all .2s; background-color: color-mix(in srgb, var(--bg-card) 76%, #fff 24%);
@@ -276,8 +352,9 @@ onUnmounted(() => {
   border: none !important;
   box-shadow: 0 8px 18px color-mix(in srgb, var(--primary) 24%, transparent);
 }
-:deep(.el-button--primary:hover) { transform: translateY(-1px); opacity: .95; }
+:deep(.el-button--primary:hover) { transform: translateY(-2px); opacity: .95; box-shadow: 0 12px 24px color-mix(in srgb, var(--primary) 30%, transparent); }
 :deep(.el-button--danger) { background: linear-gradient(135deg, #ef4444, #f97316) !important; border: none !important; }
+:deep(.el-button) { border-radius: 8px; font-weight: 600; transition: all .2s; }
 
 .click-layer { position: fixed; inset: 0; pointer-events: none; z-index: 9999; }
 .click-ripple {
@@ -289,10 +366,126 @@ onUnmounted(() => {
 @keyframes ripple { 0% { transform: scale(.4); opacity: .9; } 100% { transform: scale(5.5); opacity: 0; } }
 @keyframes spin { 0% { transform: rotate(0deg);} 100% { transform: rotate(360deg);} }
 
-@media (max-width: 900px) {
-  .profile-container { padding: 14px; }
+.profile-content {
+  display: flex; gap: 28px; align-items: flex-start; height: 100%;
+}
+
+.profile-left {
+  flex: 1; min-width: 0;
+}
+
+.profile-right {
+  flex: 1; min-width: 0;
+}
+
+.limits-panel {
+  background: linear-gradient(135deg, 
+    color-mix(in srgb, var(--primary) 8%, var(--bg-card)), 
+    color-mix(in srgb, var(--accent) 6%, var(--bg-card))
+  );
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+  border-radius: 14px; padding: 28px; backdrop-filter: blur(8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  position: sticky; top: 20px;
+}
+
+.limits-title {
+  font-size: 18px; font-weight: 700; color: var(--text-main); margin-bottom: 22px;
+  display: flex; align-items: center; gap: 8px; padding-bottom: 14px;
+  border-bottom: 2px solid color-mix(in srgb, var(--primary) 30%, transparent);
+}
+
+.limit-item {
+  margin-bottom: 22px; padding-bottom: 16px; border-bottom: 1px solid color-mix(in srgb, var(--border-soft) 60%, transparent);
+}
+
+.limit-item:last-child {
+  margin-bottom: 0; padding-bottom: 0; border-bottom: none;
+}
+
+.limit-header {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
+}
+
+.limit-label {
+  font-size: 14px; font-weight: 600; color: var(--text-main);
+}
+
+.limit-value {
+  font-size: 16px; font-weight: 700; background: linear-gradient(135deg, var(--primary), var(--accent));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+
+.limit-info {
+  font-size: 13px; color: var(--text-muted); margin-top: 8px; line-height: 1.5;
+}
+
+:deep(.el-progress) {
+  margin: 10px 0 !important;
+}
+
+:deep(.el-progress__bar) {
+  background: linear-gradient(90deg, var(--primary), var(--accent)) !important;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary) 30%, transparent);
+}
+
+:deep(.el-progress__text) {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+
+:deep(.el-progress__outer) {
+  height: 8px !important;
+}
+
+@media (max-width: 1200px) {
+  .profile-content {
+    gap: 24px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .profile-container { padding: 16px 20px; }
   .profile-header { flex-direction: column; align-items: flex-start; }
   .header-actions { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
-  .profile-card { max-width: 100%; padding: 14px; }
+  .profile-card { padding: 20px; }
+  
+  .profile-content {
+    flex-direction: column;
+  }
+  
+  .profile-right {
+    width: 100%;
+  }
+  
+  .limits-panel {
+    position: static;
+  }
+}
+
+@media (max-width: 768px) {
+  .profile-container { padding: 12px 16px; }
+  .profile-card { padding: 16px; }
+  .profile-content { gap: 16px; }
+  
+  .limits-panel {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  
+  .limit-item {
+    margin-bottom: 0; padding-bottom: 0; border-bottom: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-container { padding: 12px; }
+  .profile-card { padding: 12px; }
+  .header-actions { gap: 6px; }
+  
+  .limits-panel {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

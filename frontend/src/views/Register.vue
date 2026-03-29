@@ -6,13 +6,7 @@
       <div class="bg-decor decor-3"></div>
 
       <div class="brand-content">
-        <h1>🎯 Pureyes</h1>
-        <p class="subtitle">智能视频问答系统</p>
-        <div class="features">
-          <div class="feature-item"><span class="icon">🎬</span><span>视频智能分析</span></div>
-          <div class="feature-item"><span class="icon">💬</span><span>AI 问答交互</span></div>
-          <div class="feature-item"><span class="icon">⚡</span><span>实时响应</span></div>
-        </div>
+        <h1>Pureyes</h1>
       </div>
     </div>
 
@@ -29,7 +23,9 @@
         <p class="register-desc">注册新账号开始使用系统</p>
 
         <transition name="fade-slide">
-          <div v-if="errorMsg" class="error-message">⚠️ {{ errorMsg }}</div>
+          <div v-if="errorMsg" class="error-message">
+            <i class="ri-alert-line"></i> {{ errorMsg }}
+          </div>
         </transition>
 
         <div class="form-group">
@@ -74,6 +70,7 @@
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { register } from '../api/auth'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
 const loading = ref(false)
@@ -135,8 +132,18 @@ async function handleRegister() {
   try {
     const response = await register(form.username.trim(), form.password, form.email.trim() || null)
     if (response.code === 200 || response.code === 0 || response.code === 201) {
-      alert('注册成功！请用账号密码登录')
-      router.push('/login')
+      ElMessageBox.confirm(
+        `欢迎 ${form.username}！👋 您的账户已成功创建。`,
+        '注册成功',
+        {
+          confirmButtonText: '前往登录',
+          type: 'success',
+          center: true,
+          showCancelButton: false
+        }
+      ).then(() => {
+        router.push('/login')
+      })
     } else {
       errorMsg.value = response.message || '注册失败'
     }

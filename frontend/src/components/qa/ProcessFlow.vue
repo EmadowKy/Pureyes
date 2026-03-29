@@ -533,7 +533,7 @@ function isIterationCompleted(iter) {
   font-size: 12px;
   color: var(--text-muted);
   word-break: break-all;
-  font-family: 'Consolas', monospace;
+  font-family: 'Fira Code', 'Consolas', monospace;
   line-height: 1.4;
 }
 
@@ -861,7 +861,7 @@ function isIterationCompleted(iter) {
   background: color-mix(in srgb, var(--text-main) 10%, transparent);
   padding: 2px 4px;
   border-radius: 4px;
-  font-family: 'Consolas', monospace;
+  font-family: 'Fira Code', 'Consolas', monospace;
 }
 
 .final-desc-line {
@@ -922,7 +922,7 @@ function isIterationCompleted(iter) {
 .frame-path {
   flex: 1;
   color: var(--text-muted);
-  font-family: 'Consolas', monospace;
+  font-family: 'Fira Code', 'Consolas', monospace;
   word-break: break-all;
 }
 

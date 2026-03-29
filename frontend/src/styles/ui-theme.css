@@ -1,0 +1,528 @@
+/* ================================
+   Element Plus 组件美化样式
+   ================================ */
+
+/* 对话框美化 */
+:deep(.el-dialog) {
+  --el-dialog-bg-color: rgba(255, 255, 255, 0.95);
+  --el-dialog-border-color: rgba(0, 0, 0, 0.08);
+}
+
+:deep(.el-dialog__header) {
+  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
+  padding: 20px 24px;
+  margin: 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+:deep(.el-dialog__title) {
+  font-size: 18px;
+  font-weight: 600;
+  color: white;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+:deep(.el-dialog__headerbtn) {
+  top: 20px;
+  right: 20px;
+  width: 32px;
+  height: 32px;
+}
+
+:deep(.el-dialog__headerbtn:hover .el-icon) {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+:deep(.el-dialog__body) {
+  padding: 24px;
+  background: var(--bg-card);
+}
+
+:deep(.el-dialog__footer) {
+  padding: 16px 24px;
+  border-top: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent);
+  background: color-mix(in srgb, var(--bg-card) 95%, var(--primary) 5%);
+  text-align: right;
+}
+
+:deep(.el-dialog__footer button) {
+  margin-right: 12px;
+}
+
+/* 对话框动画 */
+:deep(.el-dialog) {
+  animation: dialogSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+:deep(.el-overlay[v-show="false"]) {
+  display: none !important;
+}
+
+@keyframes dialogSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Form 表单 */
+:deep(.el-form-item) {
+  margin-bottom: 20px;
+}
+
+:deep(.el-form-item__label) {
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+/* 输入框美化 */
+:deep(.el-input__wrapper) {
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--text-main) 12%, transparent);
+  background: color-mix(in srgb, var(--bg-card) 90%, transparent);
+  transition: all 0.2s ease;
+}
+
+:deep(.el-input__wrapper:hover) {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+:deep(.el-input__wrapper.is-focus) {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 14%, transparent);
+}
+
+:deep(.el-input__inner) {
+  color: var(--text-main);
+  font-size: 14px;
+}
+
+/* 文本域 */
+:deep(.el-textarea__inner) {
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--text-main) 12%, transparent);
+  background: color-mix(in srgb, var(--bg-card) 90%, transparent);
+  color: var(--text-main);
+  transition: all 0.2s ease;
+}
+
+:deep(.el-textarea__inner:hover) {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+:deep(.el-textarea__inner:focus) {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 14%, transparent);
+}
+
+/* 按钮美化 */
+:deep(.el-button) {
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+:deep(.el-button:hover) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+}
+
+:deep(.el-button:active) {
+  transform: translateY(0);
+}
+
+:deep(.el-button--primary) {
+  background: linear-gradient(135deg, var(--primary), var(--accent)) !important;
+  border: none !important;
+  color: white !important;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--primary) 24%, transparent) !important;
+}
+
+:deep(.el-button--primary:hover) {
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--primary) 32%, transparent) !important;
+  opacity: 0.95;
+}
+
+:deep(.el-button--primary:disabled) {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+:deep(.el-button--danger) {
+  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+  border: none !important;
+  color: white !important;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.24) !important;
+}
+
+:deep(.el-button--danger:hover) {
+  box-shadow: 0 8px 24px rgba(239, 68, 68, 0.32) !important;
+  opacity: 0.95;
+}
+
+:deep(.el-button--default) {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--text-main) 16%, transparent);
+  color: var(--text-main);
+}
+
+:deep(.el-button--default:hover) {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+:deep(.el-button.is-circle) {
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 50%;
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 复选框美化 */
+:deep(.el-checkbox__wrapper) {
+  color: var(--text-main);
+}
+
+:deep(.el-checkbox__input.is-checked .el-checkbox__inner) {
+  background-color: var(--primary) !important;
+  border-color: var(--primary) !important;
+}
+
+:deep(.el-checkbox__inner) {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--text-main) 24%, transparent);
+  background: white;
+  transition: all 0.2s ease;
+}
+
+:deep(.el-checkbox__inner:hover) {
+  border-color: var(--primary);
+}
+
+/* Icon美化 */
+:deep(.el-icon) {
+  color: inherit;
+  transition: all 0.2s ease;
+}
+
+/* Upload上传 */
+:deep(.el-upload) {
+  width: 100%;
+}
+
+:deep(.el-upload__dragger) {
+  border-radius: 8px;
+  border: 2px dashed color-mix(in srgb, var(--primary) 40%, transparent);
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
+  transition: all 0.2s ease;
+}
+
+:deep(.el-upload__dragger:hover) {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+:deep(.el-upload__tip) {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+/* MessageBox美化 */
+:deep(.el-message-box) {
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  background: var(--bg-card);
+}
+
+:deep(.el-message-box__header) {
+  padding: 24px;
+  border-bottom: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent);
+}
+
+:deep(.el-message-box__title) {
+  color: var(--text-main);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+:deep(.el-message-box__content) {
+  padding: 16px 24px;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+:deep(.el-message-box__btns) {
+  padding: 16px 24px;
+  text-align: right;
+  border-top: 1px solid color-mix(in srgb, var(--text-main) 10%, transparent);
+}
+
+:deep(.el-message-box button) {
+  margin-left: 12px;
+}
+
+/* 自定义删除对话框样式 */
+:deep(.custom-delete-messagebox) {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: messageBoxZoomIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes messageBoxZoomIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+/* 确认/取消按钮间距 */
+:deep(.el-message-box__btns) {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+:deep(.el-message-box__btns button:first-child) {
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--text-main) 16%, transparent);
+  color: var(--text-main);
+}
+
+:deep(.el-message-box__btns button:first-child:hover) {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+:deep(.el-message-box__btns button:last-child) {
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  border: none;
+  color: white;
+}
+
+:deep(.el-message-box__btns button:last-child:hover) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--primary) 32%, transparent);
+}
+
+/* Message 消息 */
+:deep(.el-message) {
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  animation: messageSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+:deep(.el-message--success) {
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.1), rgba(34, 197, 94, 0.05));
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #15803d;
+}
+
+:deep(.el-message--warning) {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(251, 191, 36, 0.05));
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: #b45309;
+}
+
+:deep(.el-message--error) {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.05));
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #dc2626;
+}
+
+:deep(.el-message--info) {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--primary) 10%, transparent), color-mix(in srgb, var(--primary) 5%, transparent));
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  color: var(--primary);
+}
+
+:deep(.el-message__icon) {
+  margin-right: 12px;
+  font-size: 16px;
+}
+
+:deep(.el-message__content) {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-100px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 下拉选择美化 */
+:deep(.el-select__wrapper) {
+  border-radius: 8px;
+}
+
+:deep(.el-select__popper) {
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  animation: popperSlideDown 0.2s ease;
+}
+
+@keyframes popperSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+:deep(.el-option:hover) {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  color: var(--primary);
+}
+
+:deep(.el-option.selected) {
+  color: var(--primary);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+/* 加载提示 */
+:deep(.el-loading-mask) {
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(4px);
+}
+
+:deep(.el-loading-spinner .circular circle) {
+  stroke: var(--primary);
+}
+
+/* Overlay 遮罩 */
+:deep(.v-modal) {
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(8px);
+}
+
+/* 标签美化 */
+:deep(.el-tag) {
+  border-radius: 12px;
+  border: none;
+  font-size: 12px;
+  padding: 6px 12px;
+}
+
+:deep(.el-tag--success) {
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d;
+}
+
+:deep(.el-tag--danger) {
+  background: rgba(239, 68, 68, 0.12);
+  color: #dc2626;
+}
+
+:deep(.el-tag--warning) {
+  background: rgba(251, 191, 36, 0.12);
+  color: #b45309;
+}
+
+:deep(.el-tag--info) {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--primary);
+}
+
+/* 分页 */
+:deep(.el-pagination) {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+:deep(.el-pagination button) {
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--text-main) 16%, transparent);
+  color: var(--text-main);
+  transition: all 0.2s ease;
+}
+
+:deep(.el-pagination button:hover) {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+:deep(.el-pagination button.active) {
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  border: none;
+  color: white;
+}
+
+:deep(.el-pagination button:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 工具提示 */
+:deep(.el-tooltip) {
+  z-index: 2000;
+}
+
+:deep(.el-popper.is-dark) {
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  :deep(.el-dialog) {
+    width: 90% !important;
+    margin: 0 !important;
+  }
+
+  :deep(.el-dialog__body) {
+    padding: 16px;
+  }
+
+  :deep(.el-message-box) {
+    width: 90% !important;
+  }
+}

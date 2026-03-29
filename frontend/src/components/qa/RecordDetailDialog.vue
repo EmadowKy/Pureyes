@@ -47,7 +47,9 @@
               {{ record.model_result?.answer || '无回答' }}
             </div>
             <div v-else class="answer-error-message">
-              <span class="error-icon">⚠️</span>
+              <span class="error-icon">
+                <i class="ri-alert-line"></i>
+              </span>
               <span>{{ record.model_result?.error || '回答失败' }}</span>
             </div>
           </div>
@@ -236,7 +238,7 @@ function formatTime(timestamp) {
 }
 
 .monospace {
-  font-family: 'Courier New', monospace;
+  font-family: 'Fira Code', 'Courier New', monospace;
   font-size: 12px;
 }
 
@@ -345,7 +347,7 @@ function formatTime(timestamp) {
   color: #666;
   font-size: 13px;
   word-break: break-all;
-  font-family: 'Courier New', monospace;
+  font-family: 'Fira Code', 'Courier New', monospace;
 }
 
 /* 模型详情 */

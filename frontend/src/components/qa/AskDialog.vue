@@ -17,14 +17,22 @@
       <div v-if="submitting" class="processing-state">
         <div class="processing-animation">
           <div class="pulse-ring"></div>
-          <div class="ai-icon">🤖</div>
+          <div class="ai-icon">
+            <i class="ri-robot-line"></i>
+          </div>
         </div>
         <h3>AI 正在分析视频内容</h3>
         <p class="processing-hint">这可能需要 1-3 分钟，请耐心等待...</p>
         <div class="processing-tips">
-          <div class="tip-item">⏱️ 复杂问题需要更长时间</div>
-          <div class="tip-item">💾 结果将自动保存</div>
-          <div class="tip-item">🔄 请勿关闭页面</div>
+          <div class="tip-item">
+            <i class="ri-timer-line"></i> 复杂问题需要更长时间
+          </div>
+          <div class="tip-item">
+            <i class="ri-save-line"></i> 结果将自动保存
+          </div>
+          <div class="tip-item">
+            <i class="ri-refresh-line"></i> 请勿关闭l页面
+          </div>
         </div>
       </div>
 
@@ -84,7 +92,9 @@
 
         <!-- 提示信息 -->
         <div class="tips-box">
-          <div class="tips-title">💡 提问小贴士</div>
+          <div class="tips-title">
+            <i class="ri-lightbulb-line"></i> 提问小贴士
+          </div>
           <ul class="tips-list">
             <li>问题描述越清晰，回答越准确</li>
             <li>可以选择多个视频进行联合分析</li>
@@ -438,7 +448,7 @@ function handleSubmit() {
   font-size: 12px;
   color: #999;
   word-break: break-all;
-  font-family: 'Courier New', monospace;
+  font-family: 'Fira Code', 'Courier New', monospace;
 }
 
 .selected-count {
@@ -462,7 +472,7 @@ function handleSubmit() {
   background: rgba(0, 0, 0, 0.06);
   padding: 2px 6px;
   border-radius: 3px;
-  font-family: 'Courier New', monospace;
+  font-family: 'Fira Code', 'Courier New', monospace;
 }
 
 /* 提示框 */
