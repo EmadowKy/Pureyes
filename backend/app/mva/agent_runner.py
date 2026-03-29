@@ -619,7 +619,7 @@ class AgentRunner:
                 start_desc = target_start
                 end_desc = target_end
                 
-            formatted_desc_part = f"{start_desc:.2f}-{end_desc:.2f}: {desc_new_part} (Score: {score_new:.2f})"
+            formatted_desc_part = f"{int(round(start_desc))}-{int(round(end_desc))}: {desc_new_part} (Score: {score_new:.2f})"
 
             if v_curr['description'] == "Initial observation." or v_curr['description'] == "":
                  v_curr['description'] = formatted_desc_part
@@ -1046,7 +1046,7 @@ class AgentRunner:
                     cv2.putText(img, video_label, (x_label, y_label), cv2.FONT_HERSHEY_SIMPLEX, font_scale, color_label, thickness, cv2.LINE_AA)
 
                     # 2. Timestamp (below label)
-                    time_text = f"{time_val:.2f}s"
+                    time_text = f"{int(round(time_val))}s"
                     text_size_time = cv2.getTextSize(time_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)[0]
                     
                     x_time = pad_x
@@ -1166,7 +1166,7 @@ class AgentRunner:
         y_label_bottom = pad_y + text_size_label[1]
         
         # Timestamp
-        text = f"{time_sec:.2f}s"
+        text = f"{int(round(time_sec))}s"
         text_size_time = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)[0]
         
         x_time = pad_x

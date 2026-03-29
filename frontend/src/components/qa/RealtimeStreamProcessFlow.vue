@@ -7,7 +7,8 @@
 
     <div v-if="state.status === 'processing' && state.processLogs.progress.length === 0" class="waiting">
       <div class="spinner"></div>
-      <p>等待模型开始运行...</p>
+      <div class="pending-badge">pending</div>
+      <p>系统正在预热</p>
     </div>
 
     <div v-else>
@@ -37,7 +38,8 @@ const state = reactive({
     iterations: [],
     progress: [],
     final_descriptions_str: '',
-    final_frame_paths: []
+    final_frame_paths: [],
+    submit_time: null  // 添加 submit_time 用于前端计时
   },
   status: 'processing',
   source: null
@@ -94,6 +96,9 @@ function mergeProcessLogs(incoming = {}) {
   if (incoming.progress) {
     state.processLogs.progress = [...incoming.progress]
   }
+  if (incoming.submit_time) {
+    state.processLogs.submit_time = incoming.submit_time
+  }
   if (incoming.final_descriptions) {
     state.processLogs.final_descriptions = incoming.final_descriptions
   }
@@ -107,6 +112,13 @@ function mergeProcessLogs(incoming = {}) {
 
 function handleProgress(item) {
   if (!item) return
+  
+  // 处理特殊的提交时间信息
+  if (item.stage === 'system' && item.status === 'submit_time') {
+    state.processLogs.submit_time = item.data?.submit_time
+    return
+  }
+  
   state.processLogs.progress.push(item)
   const data = item.data || {}
 
@@ -243,6 +255,16 @@ onUnmounted(() => {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+.pending-badge {
+  padding: 4px 8px;
+  background: #e0e0e0;
+  color: #666666;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
 }
 
 .live-hint {

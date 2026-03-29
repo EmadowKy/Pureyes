@@ -159,6 +159,10 @@ export const qaApi = {
           eventSource.close()
         } else if (data.type === 'connected') {
           console.log('SSE 连接已建立，任务:', taskId)
+          // 如果有 submit_time，通过特殊进度项返回
+          if (data.submit_time && onProgress) {
+            onProgress({ stage: 'system', status: 'submit_time', data: { submit_time: data.submit_time } })
+          }
         }
       } catch (error) {
         console.error('解析 SSE 数据失败:', error)

@@ -4,17 +4,6 @@
     <div class="flow-header">
       <div class="header-content">
         <h2 class="header-title">分析过程</h2>
-        <div class="header-stats">
-          <div class="stat">
-            <span class="stat-text">耗时: {{ totalDuration }}s</span>
-          </div>
-          <div class="stat">
-            <span class="stat-text">迭代: {{ iterationCount }} 次</span>
-          </div>
-          <div class="stat">
-            <span class="stat-text">阶段: {{ uniqueStages.length }}</span>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -23,7 +12,7 @@
       <!-- 初始化阶段 -->
       <div class="flow-section" v-if="hasInitialization">
         <div class="phase-title">初始化阶段</div>
-        <div class="phase-description">模型初始化与初始采样</div>
+        <div class="phase-description">初始采样</div>
         <div class="phase-hint" v-if="isInitializationInProgress">正在初始化...</div>
 
         <div class="videos-grid">
@@ -190,24 +179,13 @@
           <div class="loading-text">模型正在生成最终答案...</div>
         </div>
 
-        <template v-else>
-          <!-- 最终描述 -->
-          <div class="final-section" v-if="finalDescriptionHtml">
-            <div class="final-title">最终分析结果</div>
-            <div class="final-descriptions-box" v-html="finalDescriptionHtml"></div>
+        <div v-else class="final-completed">
+          <div class="completed-text">✓ 生成完成</div>
+          <div v-if="finalDuration" class="final-duration-info">
+            <span class="duration-label">耗时:</span>
+            <span class="duration-value">{{ finalDuration }}</span>
           </div>
-
-          <!-- 最终帧 -->
-          <div class="final-section" v-if="processLogs.final_frame_paths && processLogs.final_frame_paths.length > 0">
-            <div class="final-title">最终帧数据</div>
-            <div class="final-frames-box">
-              <div class="frame-row" v-for="(frame, idx) in processLogs.final_frame_paths" :key="'pf' + idx">
-                <span class="frame-index">帧 {{ idx + 1 }}</span>
-                <span class="frame-path">{{ frame }}</span>
-              </div>
-            </div>
-          </div>
-        </template>
+        </div>
       </div>
 
       <!-- 空状态 -->
@@ -219,7 +197,7 @@
 </template>
 
 <script setup>
-import { defineProps, ref, computed } from 'vue'
+import { defineProps, ref, computed, reactive, watch, onMounted, onUnmounted } from 'vue'
 import { marked } from 'marked'
 
 const props = defineProps({
@@ -230,6 +208,94 @@ const props = defineProps({
   showFinalSkeleton: {
     type: Boolean,
     default: false
+  }
+})
+
+// 本地计时状态 - 前端独立计时，不依赖后端日志更新
+const timerState = reactive({
+  submitTime: null,      // 从后端获取的提交时间戳（秒）
+  secondsElapsed: 0,     // 前端计算的已用秒数
+  isCompleted: false     // 任务是否完成
+})
+
+let timerInterval = null
+
+function updateTimer() {
+  if (timerState.submitTime === null) return
+  
+  // 简单的计算：已用时间 = 当前时间（秒） - 提交时间（秒）
+  const now = Date.now() / 1000
+  const elapsed = now - timerState.submitTime
+  timerState.secondsElapsed = Math.max(0, elapsed)
+}
+
+// 监听 submit_time 变更，初始化计时器
+watch(() => props.processLogs?.submit_time, (newSubmitTime) => {
+  if (newSubmitTime && timerState.submitTime !== newSubmitTime) {
+    timerState.submitTime = newSubmitTime
+    updateTimer()
+  }
+})
+
+// 监听任务完成状态 - 通过 showFinalSkeleton 从 true 变为 false 判断
+watch(() => props.showFinalSkeleton, (newVal, oldVal) => {
+  // 当骨架屏从显示(true)变为隐藏(false)时，说明答案生成完成
+  if (oldVal === true && newVal === false && !timerState.isCompleted) {
+    timerState.isCompleted = true
+    if (timerInterval) {
+      clearInterval(timerInterval)
+      timerInterval = null
+    }
+  }
+})
+
+// 备选：通过 progress 最后一条记录判断
+watch(() => props.processLogs?.progress?.[props.processLogs?.progress?.length - 1], (lastLog) => {
+  if (timerState.isCompleted) return
+  
+  if (lastLog && 
+      ((lastLog.stage === 'answering' && lastLog.status === 'completed') ||
+       (lastLog.stage === 'finalization' && lastLog.status === 'completed'))) {
+    timerState.isCompleted = true
+    if (timerInterval) {
+      clearInterval(timerInterval)
+      timerInterval = null
+    }
+  }
+}, { deep: false })
+
+onMounted(() => {
+  // 初始化 submit_time
+  if (props.processLogs?.submit_time) {
+    timerState.submitTime = props.processLogs.submit_time
+    updateTimer()
+  }
+  
+  // 检查是否任务已经完成（用于历史记录查看或页面刷新后的恢复）
+  const lastLog = props.processLogs?.progress?.[props.processLogs?.progress?.length - 1]
+  if (lastLog && 
+      ((lastLog.stage === 'answering' && lastLog.status === 'completed') ||
+       (lastLog.stage === 'finalization' && lastLog.status === 'completed'))) {
+    timerState.isCompleted = true
+  } else if (!props.showFinalSkeleton && (props.processLogs?.final_descriptions_str || props.processLogs?.final_descriptions?.length > 0 || props.processLogs?.final_frame_paths?.length > 0)) {
+    // 备选判断：如果骨架屏已隐藏且有最终数据，说明已完成
+    timerState.isCompleted = true
+  } else if (!props.showFinalSkeleton && !props.processLogs?.submit_time) {
+    // 对于历史记录（没有 submit_time），如果没有骨架屏就说明已完成
+    timerState.isCompleted = true
+  }
+  
+  // 启动计时器（每100ms更新一次，显示流畅）
+  // 如果已完成，不需要启动计时
+  if (!timerState.isCompleted) {
+    timerInterval = setInterval(updateTimer, 100)
+  }
+})
+
+onUnmounted(() => {
+  if (timerInterval) {
+    clearInterval(timerInterval)
+    timerInterval = null
   }
 })
 
@@ -286,11 +352,36 @@ const finalDescriptionHtml = computed(() => {
 })
 
 const totalDuration = computed(() => {
-  if (!props.processLogs?.progress || props.processLogs.progress.length < 2) return '0'
-  const logs = props.processLogs.progress
-  const start = logs[0].timestamp
-  const end = logs[logs.length - 1].timestamp
-  return (end - start).toFixed(1)
+  // 使用前端本地计时的值，实现连续流畅的秒数显示
+  if (timerState.submitTime === null) {
+    return '0秒'
+  }
+  
+  const seconds = Math.round(timerState.secondsElapsed)
+  return formatDuration(Math.max(0, seconds))
+})
+
+const finalDuration = computed(() => {
+  // 在任务完成后，使用实际的 progress 时间戳计算耗时
+  if (!timerState.isCompleted) {
+    return null
+  }
+  
+  const logs = props.processLogs?.progress
+  if (!logs || logs.length < 1) {
+    return null
+  }
+  
+  // 如果只有一条记录，无法计算，使用本地计数
+  if (logs.length < 2) {
+    const seconds = Math.round(timerState.secondsElapsed)
+    return formatDuration(Math.max(0, seconds))
+  }
+  
+  const startTime = logs[0].timestamp
+  const endTime = logs[logs.length - 1].timestamp
+  const seconds = Math.round(endTime - startTime)
+  return formatDuration(Math.max(0, seconds))
 })
 
 const finalizationLogs = computed(() => {
@@ -298,7 +389,8 @@ const finalizationLogs = computed(() => {
 })
 
 const finalSectionVisible = computed(() => {
-  return props.showFinalSkeleton || finalizationLogs.value.length > 0 || !!props.processLogs?.final_descriptions || !!props.processLogs?.final_descriptions_str || (props.processLogs?.final_frame_paths && props.processLogs.final_frame_paths.length > 0)
+  // 只要有最终化日志或者正在生成答案或已经完成，就显示最终化阶段
+  return props.showFinalSkeleton || finalizationLogs.value.length > 0 || timerState.isCompleted
 })
 
 const groupedIterations = computed(() => {
@@ -313,6 +405,19 @@ function filterLogsByStage(stage) {
 function formatTime(val) {
   if (typeof val === 'number') return val.toFixed(1)
   return String(val)
+}
+
+function formatDuration(seconds) {
+  if (seconds === 0) return '0秒'
+  const minutes = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  if (minutes === 0) {
+    return `${secs}秒`
+  }
+  if (secs === 0) {
+    return `${minutes}分`
+  }
+  return `${minutes}分${secs}秒`
 }
 
 function formatNumber(val, digits = 2) {
@@ -991,6 +1096,44 @@ function getIterationStatusClass(iter, idx) {
   background: color-mix(in srgb, var(--primary) 12%, transparent);
   color: var(--text-muted);
   animation: fadeIn 0.4s ease-out backwards;
+}
+
+.final-completed {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--success) 8%, transparent);
+  border-left: 3px solid var(--success);
+}
+
+.completed-text {
+  color: var(--success);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.final-duration-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+}
+
+.duration-label {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.duration-value {
+  color: var(--success);
+  font-weight: 700;
+  font-size: 16px;
 }
 
 .frame-row {

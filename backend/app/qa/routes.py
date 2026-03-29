@@ -103,6 +103,12 @@ def process_question_async(task_id, user_id, username, question, video_paths, co
         if progress_data and not result['process_logs'].get('progress'):
             result['process_logs']['progress'] = progress_data
             print(f"添加 progress 数据: {len(progress_data)} 项")
+        
+        # 添加提交时间到 process_logs（前端用此作为计时起点）
+        submit_time = running_tasks[task_id].get('submit_time')
+        if submit_time:
+            result['process_logs']['submit_time'] = submit_time
+            print(f"添加 submit_time: {submit_time}")
 
         # 创建最终记录
         final_record = {
@@ -211,7 +217,8 @@ def ask():
         # 先保存一个临时记录到用户的记录中（按 uid 存储，保留 username 作展示）
         qa_manager.save_temp_record(uid, temp_record, username)
         
-        # 记录任务
+        # 记录任务（记录提交时间作为计时基准）
+        submit_time = time.time()
         running_tasks[task_id] = {
             'uid': uid,
             'username': username,
@@ -219,6 +226,7 @@ def ask():
             'video_paths': video_paths,
             'status': 'processing',
             'created_at': datetime.now().isoformat(),
+            'submit_time': submit_time,
             'record_id': task_id,
             'progress_queue': Queue()
         }
@@ -562,8 +570,9 @@ def stream_task_progress(task_id):
             """生成器函数：持续推送进度事件"""
             progress_queue = task.get('progress_queue')
             
-            # SSE连接保活信号
-            yield f"data: {json.dumps({'type': 'connected', 'task_id': task_id})}\n\n"
+            # SSE连接保活信号 - 包含 submit_time
+            submit_time = task.get('submit_time', time.time())
+            yield f"data: {json.dumps({'type': 'connected', 'task_id': task_id, 'submit_time': submit_time})}\n\n"
             
             # 不断推送新进度
             while True:
