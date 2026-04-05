@@ -9,8 +9,8 @@ paths:
 
 parameters:
   size: 360
-  num_frames_iter: 4
-  num_frames_noiter: 4
+  num_frames_iter: 8
+  num_frames_noiter: 32
   num_gpus: 1
   # 任务数量, -1 表示所有
   num_tasks: -1
@@ -28,8 +28,8 @@ parameters:
 
   # Agent 参数
   agent:
-    global_max_iterations: 4 # 通过Tool Agent获取信息的全局最大迭代次数
-    frame_bank_size: 4 # 每个视频最多取这么多帧
+    global_max_iterations: 20 # 通过Tool Agent获取信息的全局最大迭代次数
+    frame_bank_size: 16 # 每个视频最多取这么多帧
     initial_acceleration: 1.0
     min_acceleration_threshold: 0.2 # 单视频最低加速度阈值，低于则终止该视频
     max_score_threshold: 0.8 # 所有视频平均分数超过则整体终止
@@ -46,65 +46,51 @@ parameters:
 
 prompts:
   answer_combined: |
-    /no_think
-    /* Task Description */
-    You are an Answer Generation model for the video question and answer task.
-    Here is an open-ended question about multiple videos.
-    Question: "{QUESTION}"
+   /* 任务说明 */
+    你是一款用于视频问答任务的答案生成模型。
+    以下是一道针对多个视频的开放式问题。
+    问题：“{QUESTION}”
 
-    You are provided with multiple keyframes extracted from different videos. Each frame has a watermark in the top-left corner indicating which video it belongs to (e.g., "Video 1", "Video 2") and its timestamp.
-    You are also provided with textual descriptions for each video:
-    {DESCRIPTIONS}
+    你会获取从不同视频中截取的多个关键帧。每个关键帧的左上角均带有水印，标明其所属视频（如 “视频 1”“视频 2”）及对应时间戳。
+    同时你还会获取每个视频的文字描述内容：{DESCRIPTIONS}
 
-    Your task is to analyze all the provided keyframes AND the video descriptions to answer the question. Pay attention to:
-    1. The specific visual details in keyframes relevant to answering the question.
-    2. The events and details described in each video description.
-    3. The differences and similarities between videos.
 
-    When your answer involves a specific timestamp of a video (e.g., 1 minute and 23 seconds of Video 1), be sure to replace it with the following format: [video: "1",time:"01:23"]
-    
-    **Output Format:**
-    Output a complete, accurate and concise natural language answer.
-  
+    当答案中涉及某一视频的具体时间（如视频 1 的 1 分 23 秒），务必替换为以下格式：[video:"1",time:"01:23"]
+    不要只给出秒数，需严格遵循格式要求。例如，不要表述 “视频 3 的 10 至 20 秒”，而应使用 [video:"3",time:"00:10"] 至 [video:"3",time:"00:20"]。
+
+    你只需简单解释,但不要事无巨细,你可以使用markdown
+
+    输出格式：自然作答，仿佛你正在观看这些视频，答案中不要出现"描述"或"关键帧"等字样.你的答案中可以穿插时间,但时间务必按照格式
+
   answer_visual_only: |
-    /no_think
-    /* Task Description */
-    You are an Answer Generation model for the video question and answer task.
-    Here is an open-ended question about multiple videos.
-    Question: "{QUESTION}"
+    /* 任务说明 */
+    你是一款用于视频问答任务的答案生成模型。
+    以下是一道针对多个视频的开放式问题。
+    问题：“{QUESTION}”
 
-    You are provided with multiple keyframes extracted from different videos. Each frame has a watermark in the top-left corner indicating which video it belongs to (e.g., "Video 1", "Video 2") and its timestamp.
+    你会获取从不同视频中截取的多个关键帧。每个关键帧的左上角均带有水印，标明其所属视频（如 “视频 1”“视频 2”）及对应时间戳。
 
-    Your task is to analyze all the provided keyframes to answer the question. Pay attention to:
-    1. The specific visual details in keyframes relevant to answering the question.
-    2. Which video each frame belongs to (indicated by the watermark).
-    3. The differences and similarities between frames from different videos.
+    当答案中涉及某一视频的具体时间（如视频 1 的 1 分 23 秒），务必替换为以下格式：[video:"1",time:"01:23"]
+    不要只给出秒数，需严格遵循格式要求。例如，不要表述 “视频 3 的 10 至 20 秒”，而应使用 [video:"3",time:"00:10"] 至 [video:"3",time:"00:20"]。
 
-    When your answer involves a specific timestamp of a video (e.g., 1 minute and 23 seconds of Video 1), be sure to replace it with the following format: [video: "1",time:"01:23"]
-    
-    **Output Format:**
-    Output a complete, accurate and concise natural language answer.
+    你只需简单解释,但不要事无巨细,你可以使用markdown
+
+    输出格式：自然作答，仿佛你正在观看这些视频，答案中不要出现"描述"或"关键帧"等字样.你的答案中可以穿插时间,但时间务必按照格式
 
   answer_text_only: |
-    /no_think
-    /* Task Description */
-    You are an Answer Generation model for the video question and answer task.
-    Here is an open-ended question about multiple videos.
-    Question: "{QUESTION}"
+   /* 任务说明 */
+    你是一款用于视频问答任务的答案生成模型。
+    以下是一道针对多个视频的开放式问题。
+    问题：“{QUESTION}”
 
-    You are provided with detailed textual descriptions for each video:
-    Video Descriptions:
-    {DESCRIPTIONS}
+    你会获取每个视频的文字描述内容：{DESCRIPTIONS}
 
-    Your task is to analyze the provided video descriptions to answer the question. Pay attention to:
-    1. The events and details described in each video description.
-    2. The timestamps mentioned in the descriptions.
-    3. The differences and similarities between videos based on their descriptions.
+    当答案中涉及某一视频的具体时间（如视频 1 的 1 分 23 秒），务必替换为以下格式：[video:"1",time:"01:23"]
+    不要只给出秒数，需严格遵循格式要求。例如，不要表述 “视频 3 的 10 至 20 秒”，而应使用 [video:"3",time:"00:10"] 至 [video:"3",time:"00:20"]。
 
-    When your answer involves a specific timestamp of a video (e.g., 1 minute and 23 seconds of Video 1), be sure to replace it with the following format: [video: "1",time:"01:23"]
-   
-    **Output Format:**
-    Output a complete, accurate and concise natural language answer.
+    你只需简单解释,但不要事无巨细,你可以使用markdown
+
+    输出格式：自然作答，仿佛你正在观看这些视频，答案中不要出现"描述"或"关键帧"等字样.你的答案中可以穿插时间,但时间务必按照格式
 
   question_analysis: |
     /no_think

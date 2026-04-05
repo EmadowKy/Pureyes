@@ -1,4 +1,3 @@
-# backend/run.py
 import os
 import sys
 

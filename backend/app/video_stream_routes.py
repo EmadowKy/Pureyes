@@ -8,13 +8,13 @@ import tempfile
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-video_bp = Blueprint('video', __name__, url_prefix='/api/video')
+video_stream_bp = Blueprint('video_stream', __name__, url_prefix='/api/video')
 
 current_file = os.path.abspath(__file__)
 BACKEND_DIR = os.path.dirname(os.path.dirname(current_file))
 
-print(f"[DEBUG] video_routes.py current file: {current_file}")
-print(f"[DEBUG] video_bp BACKEND_DIR: {BACKEND_DIR}")
+print(f"[DEBUG] video_stream_routes.py current file: {current_file}")
+print(f"[DEBUG] video_stream_bp BACKEND_DIR: {BACKEND_DIR}")
 
 executor = ThreadPoolExecutor(max_workers=2)
 transcoded_cache = {}
@@ -134,7 +134,7 @@ def _transcode_video(video_path: str, output_path: str) -> bool:
         return False
 
 
-@video_bp.route('/<path:video_path>')
+@video_stream_bp.route('/<path:video_path>')
 def serve_video(video_path):
     """
     提供视频文件访问（支持实时转码）
@@ -223,32 +223,3 @@ def serve_video(video_path):
     except Exception as e:
         print(f"Error serving video: {e}")
         abort(500, description=f"Internal server error: {str(e)}")
-
-
-@video_bp.route('/check/<path:video_path>')
-def check_video(video_path):
-    """
-    检查视频格式是否兼容网页播放
-    GET /api/video/check/<path>
-    """
-    try:
-        safe_video_path = _normalize_video_path(video_path)
-        full_path = os.path.abspath(os.path.join(BACKEND_DIR, safe_video_path))
-
-        if not full_path.startswith(BACKEND_DIR + os.sep) and full_path != BACKEND_DIR:
-            return {'error': 'Access denied'}, 403
-
-        if not os.path.exists(full_path):
-            return {'error': 'Video not found'}, 404
-
-        is_compat, codec_info, needs_tc = _check_video_compatible(full_path)
-
-        return {
-            'compatible': is_compat,
-            'codec': codec_info,
-            'needs_transcode': needs_tc
-        }
-
-    except Exception as e:
-        print(f"Error checking video: {e}")
-        return {'error': str(e)}, 500

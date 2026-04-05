@@ -917,6 +917,7 @@ const selectedVideos = computed(() => videoList.value.filter(v => v.selected))
 /* 轮询 */
 let pollingInterval = null
 const processedTasks = new Set()
+const taskTokenMap = new Map()
 function startPolling() {
   pollingInterval = setInterval(async () => {
     await checkProcessingTasks()
@@ -1016,37 +1017,6 @@ const detailAnswerHtml = computed(() => {
   return html
 })
 
-// 悬浮窗口答案处理（只做文本替换，不支持跳转）
-const floatingAnswerHtml = computed(() => {
-  const detail = viewRecordDetail.value
-  if (!detail || !detail.model_result) return ''
-  const raw = detail.model_result.predicted_answer || detail.model_result.answer || ''
-  
-  // 先用 markdown 渲染
-  const markdownHtml = renderMarkdown(raw)
-  
-  // 从原始文本解析时间戳信息
-  const parts = parseTimestamps(raw)
-  
-  // 检查是否有时间戳
-  const hasTimestamps = parts.some(p => p.type === 'timestamp')
-  
-  if (!hasTimestamps) {
-    return markdownHtml
-  }
-  
-  // 生成纯文本（带格式化的时间戳）
-  const plainText = generatePlainText(parts)
-  
-  // 转义 HTML 并用 <pre> 显示，或重新用 markdown 渲染
-  const escapedText = plainText
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-  
-  return `<div class="answer-floating-window">${escapedText}</div>`
-})
-
 // 监听 detailAnswerHtml 变化，重新绑定时间戳元素的事件
 watch(detailAnswerHtml, () => {
   nextTick(() => {
@@ -1054,9 +1024,13 @@ watch(detailAnswerHtml, () => {
   })
 })
 
-// 获取当前用户token
+// 获取当前任务token
 function getCurrentToken() {
-  return localStorage.getItem('access_token') || localStorage.getItem('token')
+  const taskId = viewRecordDetail.value?.record_id
+  if (taskId && taskTokenMap.has(taskId)) {
+    return taskTokenMap.get(taskId)
+  }
+  return localStorage.getItem('access_token')
 }
 
 const stats = reactive({ total: 0, success: 0, failure: 0, processing: 0 })
@@ -1157,6 +1131,9 @@ async function submitQuestion() {
     const videoPaths = selectedVideos.value.map(v => v.video_path)
     const result = await qaApi.askQuestion({ question: questionInput.value, video_paths: videoPaths })
     questionInput.value = ''
+    if (result.data && result.data.task_id && result.data.task_token) {
+      taskTokenMap.set(result.data.task_id, result.data.task_token)
+    }
     await loadStats()
     await loadRecords()
     showNotificationBanner('问题已提交，AI 正在分析中...', 'success')
@@ -1178,14 +1155,16 @@ async function submitQuestion() {
 // 处理实时流完成
 async function handleStreamComplete(status) {
   console.log('Stream complete, status:', status)
-  // 等待一下后端完全存储数据
   await new Promise(resolve => setTimeout(resolve, 500))
-  
-  // 重新获取记录列表和该任务的最新数据
+
+  const completedTaskId = viewRecordDetail.value?.record_id
+  if (completedTaskId) {
+    taskTokenMap.delete(completedTaskId)
+  }
+
   await loadStats()
   await loadRecords()
-  
-  // 更新当前显示的记录（刷新答案和完整过程）
+
   if (viewRecordDetail.value) {
     const updatedRecord = records.value.find(r => r.record_id === viewRecordDetail.value.record_id)
     if (updatedRecord) {

@@ -12,7 +12,7 @@ const api = axios.create({
 // 请求拦截器 - 添加 token
 api.interceptors.request.use(
   config => {
-    const token = localStorage.getItem('access_token') || localStorage.getItem('token')
+    const token = localStorage.getItem('access_token')
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`
     }
@@ -143,7 +143,7 @@ export const qaApi = {
    * @returns {EventSource} - 返回 EventSource 对象，可以通过 .close() 关闭连接
    */
   subscribeTaskProgress(taskId, onProgress, onComplete, onError, tokenOverride = '') {
-    const token = tokenOverride || localStorage.getItem('access_token') || localStorage.getItem('token')
+    const token = tokenOverride || localStorage.getItem('access_token')
     const url = `/api/qa/task/${taskId}/stream${token ? '?token=' + encodeURIComponent(token) : ''}`
     
     const eventSource = new EventSource(url)

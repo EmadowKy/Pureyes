@@ -8,11 +8,9 @@ from flask_jwt_extended import (
 )
 from app.core.db import db
 from app.models.user import User
-from app.common.response import success, fail
+from app.models.blacklist import TokenBlacklist
+from app.core.response import success, fail
 from . import auth_bp
-
-# 简单的内存黑名单，用于存储已撤销的token
-token_blacklist = set()
 
 def _validate_register_payload(payload: dict):
     username = (payload.get("username") or "").strip()
@@ -80,7 +78,6 @@ def login():
     if not user.check_password(password):
         return fail(message="invalid username or password", code=1102, http_status=401)
 
-    # identity 存 uid，附加 claims 存 role
     access_token = create_access_token(
         identity=str(user.id),
         additional_claims={"role": user.role, "username": user.username}
@@ -122,10 +119,6 @@ def refresh():
 @auth_bp.post("/logout")
 @jwt_required()
 def logout():
-    # 获取当前token的jti
     jti = get_jwt()["jti"]
-    # 将token加入黑名单
-    token_blacklist.add(jti)
-    return success(
-        message="logout success"
-    )
+    TokenBlacklist.add(jti)
+    return success(message="logout success")

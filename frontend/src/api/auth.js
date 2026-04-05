@@ -1,6 +1,6 @@
 import axios from 'axios'
+import router from '../router'
 
-// 创建 axios 实例（无需在请求前添加 token）
 const authApi = axios.create({
   baseURL: '/api',
   timeout: 10000,
@@ -9,25 +9,23 @@ const authApi = axios.create({
   }
 })
 
-// 响应拦截器 - 统一处理错误
 authApi.interceptors.response.use(
-  response => {
-    // 成功响应，直接返回数据
-    return response.data
-  },
+  response => response.data,
   error => {
     console.error('API 请求错误:', error)
     
-    // 处理响应错误
     if (error.response) {
       const { status, data } = error.response
       let errorMessage = data?.message || error.message || '请求失败'
       
-      // 针对不同的状态码提供更详细的错误信息
       if (status === 400) {
         errorMessage = data?.message || '请求参数错误'
       } else if (status === 401) {
         errorMessage = data?.message || '未授权，请重新登录'
+        clearAuthInfo()
+        if (router.currentRoute.value.path !== '/login') {
+          router.push('/login')
+        }
       } else if (status === 403) {
         errorMessage = data?.message || '禁止访问'
       } else if (status === 404) {
@@ -40,50 +38,23 @@ authApi.interceptors.response.use(
       
       return Promise.reject(new Error(errorMessage))
     } 
-    // 处理网络错误
     else if (error.request) {
       return Promise.reject(new Error('网络连接失败，请检查网络设置'))
     } 
-    // 其他错误
     else {
       return Promise.reject(new Error(error.message || '请求失败'))
     }
   }
 )
 
-/**
- * 用户登录
- * @param {string} username - 用户名
- * @param {string} password - 密码
- * @returns {Promise}
- */
 export function login(username, password) {
-  return authApi.post('/auth/login', {
-    username,
-    password
-  })
+  return authApi.post('/auth/login', { username, password })
 }
 
-/**
- * 用户注册
- * @param {string} username - 用户名
- * @param {string} password - 密码
- * @param {string} email - 邮箱（可选）
- * @returns {Promise}
- */
 export function register(username, password, email = null) {
-  return authApi.post('/auth/register', {
-    username,
-    password,
-    email
-  })
+  return authApi.post('/auth/register', { username, password, email })
 }
 
-/**
- * 刷新 Token
- * @param {string} refreshToken - 刷新 token
- * @returns {Promise}
- */
 export function refreshToken(refreshToken) {
   return authApi.post('/auth/refresh', {}, {
     headers: {
@@ -92,42 +63,23 @@ export function refreshToken(refreshToken) {
   })
 }
 
-/**
- * 用户登出
- * @returns {Promise}
- */
 export function logout() {
   return authApi.post('/auth/logout')
 }
 
-/**
- * 清除本地认证信息
- */
 export function clearAuthInfo() {
   localStorage.removeItem('access_token')
   localStorage.removeItem('refresh_token')
   localStorage.removeItem('user_info')
-  localStorage.removeItem('qa_username')
-  localStorage.removeItem('token')
 }
 
-/**
- * 保存认证信息
- * @param {Object} authData - 认证数据
- */
 export function saveAuthInfo(authData) {
   const { access_token, refresh_token, user } = authData
   localStorage.setItem('access_token', access_token)
   localStorage.setItem('refresh_token', refresh_token)
   localStorage.setItem('user_info', JSON.stringify(user))
-  localStorage.setItem('qa_username', user.username) // 保持兼容性
-  localStorage.setItem('token', access_token) // 保持兼容性
 }
 
-/**
- * 获取保存的认证信息
- * @returns {Object}
- */
 export function getAuthInfo() {
   const userInfo = localStorage.getItem('user_info')
   return {
@@ -135,4 +87,33 @@ export function getAuthInfo() {
     refresh_token: localStorage.getItem('refresh_token'),
     user: userInfo ? JSON.parse(userInfo) : null
   }
+}
+
+export function isTokenExpired() {
+  const token = localStorage.getItem('access_token')
+  if (!token) return true
+  
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    const exp = payload.exp * 1000
+    return Date.now() >= exp
+  } catch {
+    return true
+  }
+}
+
+export async function tryRefreshToken() {
+  const refreshTokenValue = localStorage.getItem('refresh_token')
+  if (!refreshTokenValue) return false
+
+  try {
+    const response = await refreshToken(refreshTokenValue)
+    if (response.code === 0 && response.data?.access_token) {
+      localStorage.setItem('access_token', response.data.access_token)
+      return true
+    }
+  } catch {
+    clearAuthInfo()
+  }
+  return false
 }

@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { isTokenExpired, tryRefreshToken } from '../api/auth'
 import IntegratedQA from '../views/IntegratedQA.vue'
 import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
@@ -27,19 +28,34 @@ const router = createRouter({
   routes
 })
 
-// 路由守卫
-router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('access_token') || localStorage.getItem('token')
+router.beforeEach(async (to, from, next) => {
+  const token = localStorage.getItem('access_token')
   
-  // 需要登录但没登录，跳转到登录页
-  if (to.meta.requiresAuth && !token) {
-    next('/login')
-  } 
-  // 已登录但访问登录或注册页，跳转到首页
-  else if ((to.path === '/login' || to.path === '/register') && token) {
+  if (to.meta.requiresAuth) {
+    if (!token) {
+      next('/login')
+      return
+    }
+    
+    if (isTokenExpired()) {
+      const refreshed = await tryRefreshToken()
+      if (!refreshed) {
+        next('/login')
+        return
+      }
+    }
+  }
+  
+  if ((to.path === '/login' || to.path === '/register') && token) {
+    if (isTokenExpired()) {
+      const refreshed = await tryRefreshToken()
+      if (!refreshed) {
+        next()
+        return
+      }
+    }
     next('/qa')
-  } 
-  else {
+  } else {
     next()
   }
 })

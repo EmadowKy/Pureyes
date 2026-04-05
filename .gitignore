@@ -2,41 +2,49 @@
 *.py[cod]
 __pycache__/
 
-# 数据或结果输出
-output/
-
 # 前端依赖
 node_modules/
 .DS_Store
+.vite/
+
+# IDE
+.idea/
+.vscode/
+*.swp
 
 # 数据库文件
 *.db
 *.sqlite
 *.sqlite3
 
-# Flask instance目录（视如果创建的情况）
+# Flask instance目录
 instance/
 
 # Python虚拟环境
 venv/
 .venv/
 env/
+
+# 环境变量
 .env
 
 # 日志
 *.log
 
-# 运行时生成的数据目录（细化）
-output/qa_backups/
-output/qa_records/
-output/video_frames/
-output/key_frames/
+# 运行时生成的数据
+output/
 backend/uploads/
 temp/
-# 输出中的 JSON 备份（仅忽略 output 下的 json）
-output/**/*.json
 
 # 前端构建产物
 frontend/dist/
+
+# Python分发包
+*.egg-info/
+dist/
+
+# 测试和类型检查缓存
+.pytest_cache/
+.mypy_cache/
 
 *.zip

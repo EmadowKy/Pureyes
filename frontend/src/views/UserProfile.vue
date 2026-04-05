@@ -58,28 +58,28 @@
         <div class="profile-right">
           <div class="limits-panel">
             <div class="limits-title">使用限制</div>
-            
+
             <div class="limit-item">
               <div class="limit-header">
                 <span class="limit-label">视频数量</span>
-                <span class="limit-value">{{ form.video_count }}/30</span>
+                <span class="limit-value">{{ form.video_count }}/{{ userConfig.max_videos_per_user }}</span>
               </div>
-              <el-progress 
-                :percentage="(form.video_count / 30) * 100" 
-                :status="form.video_count >= 30 ? 'exception' : (form.video_count >= 20 ? 'warning' : 'success')"
+              <el-progress
+                :percentage="(form.video_count / userConfig.max_videos_per_user) * 100"
+                :status="form.video_count >= userConfig.max_videos_per_user ? 'exception' : (form.video_count >= userConfig.max_videos_per_user * 0.75 ? 'warning' : 'success')"
                 :striped="true"
               />
-              <div class="limit-info">{{ form.video_count >= 30 ? '已达上限' : `还可上传 ${30 - form.video_count} 个` }}</div>
+              <div class="limit-info">{{ form.video_count >= userConfig.max_videos_per_user ? '已达上限' : `还可上传 ${userConfig.max_videos_per_user - form.video_count} 个` }}</div>
             </div>
 
             <div class="limit-item">
               <div class="limit-header">
                 <span class="limit-label">存储空间</span>
-                <span class="limit-value">{{ formatSize(form.total_video_size) }}/2GB</span>
+                <span class="limit-value">{{ formatSize(form.total_video_size) }}/{{ formatSize(userConfig.max_storage_per_user) }}</span>
               </div>
-              <el-progress 
-                :percentage="(form.total_video_size / 2147483648) * 100" 
-                :status="form.total_video_size >= 2147483648 * 0.9 ? 'exception' : (form.total_video_size >= 2147483648 * 0.75 ? 'warning' : 'success')"
+              <el-progress
+                :percentage="(form.total_video_size / userConfig.max_storage_per_user) * 100"
+                :status="form.total_video_size >= userConfig.max_storage_per_user * 0.9 ? 'exception' : (form.total_video_size >= userConfig.max_storage_per_user * 0.75 ? 'warning' : 'success')"
                 :striped="true"
               />
               <div class="limit-info">{{ formatRemainingSpace }}</div>
@@ -88,7 +88,7 @@
             <div class="limit-item">
               <div class="limit-header">
                 <span class="limit-label">单个视频最大</span>
-                <span class="limit-value">500MB</span>
+                <span class="limit-value">{{ formatSize(userConfig.max_single_video_size) }}</span>
               </div>
               <div class="limit-info">MP4 格式视频文件</div>
             </div>
@@ -115,13 +115,19 @@
 import { onMounted, onUnmounted, reactive, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getCurrentUser } from '../api/user'
+import { getCurrentUser, getUserConfig } from '../api/user'
 import { logout, clearAuthInfo } from '../api/auth'
 
 const router = useRouter()
 
 const loading = ref(false)
 const errorMsg = ref('')
+
+const userConfig = ref({
+  max_videos_per_user: 30,
+  max_storage_per_user: 2147483648,
+  max_single_video_size: 524288000
+})
 
 const form = reactive({
   uid: '',
@@ -175,6 +181,22 @@ async function loadUser() {
   }
 }
 
+async function loadUserConfig() {
+  try {
+    const response = await getUserConfig()
+    if (response && (response.code === 0 || response.code === 200)) {
+      const data = response.data || response
+      userConfig.value = {
+        max_videos_per_user: data.max_videos_per_user || 30,
+        max_storage_per_user: data.max_storage_per_user || 2147483648,
+        max_single_video_size: data.max_single_video_size || 524288000
+      }
+    }
+  } catch (error) {
+    console.error('获取用户配置失败', error)
+  }
+}
+
 
 
 function formatSize(bytes) {
@@ -186,8 +208,8 @@ function formatSize(bytes) {
 }
 
 const formatRemainingSpace = computed(() => {
-  const MAX_STORAGE = 2147483648 // 2GB
-  const remaining = MAX_STORAGE - form.total_video_size
+  const maxStorage = userConfig.value.max_storage_per_user
+  const remaining = maxStorage - form.total_video_size
   if (remaining <= 0) return '已满'
   return `还可上传 ${formatSize(remaining)}`
 })
@@ -211,6 +233,7 @@ async function handleLogout() {
 onMounted(() => {
   applyTheme()
   loadUser()
+  loadUserConfig()
   window.addEventListener('click', handleGlobalClick)
 })
 onUnmounted(() => {

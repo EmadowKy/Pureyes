@@ -1,4 +1,3 @@
-# backend/app/qa/routes.py
 """QA 模块的 API 路由 - 支持异步处理"""
 
 from flask import Blueprint, request, jsonify, send_file, Response
@@ -11,6 +10,9 @@ import tempfile
 import time
 import threading
 import uuid
+import hashlib
+import hmac
+import secrets
 from datetime import datetime
 from queue import Queue
 
@@ -21,19 +23,59 @@ config_path = os.path.join(os.path.dirname(__file__), "../../configs/qa_storage.
 qa_manager = QAManager(config_path)
 
 # 存储正在运行的任务（内存存储，重启后清空）
-# 格式：{ task_id: { "username": str, "question": str, "status": str, "created_at": datetime, "progress_queue": Queue } }
+# 格式：{ task_id: { "uid": str, "username": str, "question": str, "status": str, "created_at": datetime, "progress_queue": Queue } }
 running_tasks = {}
+
+# 任务 token 映射，用于 SSE 接口验证 { task_id: access_token }
+task_tokens = {}
+
+# Token 过期时间（秒）
+TOKEN_EXPIRY_SECONDS = 3600
+
+
+def generate_task_token(task_id, uid):
+    """为任务生成安全的访问 token"""
+    token = secrets.token_urlsafe(32)
+    task_tokens[task_id] = {
+        'token': token,
+        'uid': uid,
+        'created_at': time.time()
+    }
+    return token
+
+
+def validate_task_token(task_id, token):
+    """验证任务访问 token"""
+    if task_id not in task_tokens:
+        return False
+    token_info = task_tokens[task_id]
+    if not hmac.compare_digest(token_info['token'], token):
+        return False
+    if time.time() - token_info['created_at'] > TOKEN_EXPIRY_SECONDS:
+        del task_tokens[task_id]
+        return False
+    return True
+
+
+def cleanup_task(task_id):
+    """清理任务相关的内存数据"""
+    if task_id in running_tasks:
+        del running_tasks[task_id]
+    if task_id in task_tokens:
+        del task_tokens[task_id]
 
 
 def get_current_user(request_data=None):
-    """Return (uid, username). Prefer JWT identity and claims; fall back to request data or headers.
+    """获取当前用户信息，返回 (uid, username)。
 
-    uid may be None if JWT is not present. username may be None as well.
+    优先使用 JWT 身份和声明，其次回退到请求数据或请求头。
+
+    uid 如果 JWT 不存在则可能为 None。username 可能也为 None。
     """
     uid = None
     username = None
 
-    # try jwt first
+    # 优先尝试 JWT
     try:
         uid = get_jwt_identity()
         claims = get_jwt()
@@ -42,15 +84,15 @@ def get_current_user(request_data=None):
         uid = None
         username = None
 
-    # fallback to request body
+    # 回退到请求体
     if not username and request_data and isinstance(request_data, dict):
         username = request_data.get('username')
 
-    # fallback to query
+    # 回退到查询参数
     if not username:
         username = request.args.get('username')
 
-    # fallback to header
+    # 回退到请求头
     if not username:
         username = request.headers.get('X-Username')
 
@@ -60,57 +102,35 @@ def get_current_user(request_data=None):
 def process_question_async(task_id, user_id, username, question, video_paths, config_path):
     """后台线程处理问题"""
     try:
-        print(f"\n{'='*60}")
-        print(f"任务启动: {task_id}")
-        print(f"用户: {user_id} ({username})")
-        print(f"问题: {question}")
-        print(f"{'='*60}\n")
-        
-        # 初始化任务进度信息
+        print(f"[QA] 任务启动: {task_id}, 用户: {username}")
+
         running_tasks[task_id]['progress'] = []
-        # progress_queue 已在/ask路由中初始化
 
         def progress_callback(item):
             running_tasks[task_id].setdefault('progress', []).append(item)
-            # 同时推送到队列以供SSE实时使用
             progress_queue = running_tasks[task_id].get('progress_queue')
             if progress_queue:
                 progress_queue.put(item)
 
-        # 调用模型回答问题
-        print("正在调用模型...")
         result = ask_model(question, video_paths, config_path, progress_callback=progress_callback)
 
-        # 提取回答内容 - 优先使用 predicted_answer，其次使用 answer_generation.raw_output
         answer = result.get('predicted_answer') or \
                  (result.get('answer_generation') or {}).get('raw_output') or \
                  '无回答'
 
-        # 添加 answer 字段到 model_result（方便前端读取）
         result['answer'] = answer
-        
-        print(f"模型返回的数据结构: {list(result.keys())}")
-        print(f"包含 process_logs: {'process_logs' in result}")
-        
-        # 添加进度日志（process_logs）到结果中
-        # 如果 ask_model 返回了 process_logs，使用它；否则使用收集的进度信息
+
         if 'process_logs' not in result:
             result['process_logs'] = {}
-            print("创建新的 process_logs")
-        
-        # 将进度信息添加到 process_logs（用于前端显示分析过程）
+
         progress_data = running_tasks[task_id].get('progress', [])
         if progress_data and not result['process_logs'].get('progress'):
             result['process_logs']['progress'] = progress_data
-            print(f"添加 progress 数据: {len(progress_data)} 项")
-        
-        # 添加提交时间到 process_logs（前端用此作为计时起点）
+
         submit_time = running_tasks[task_id].get('submit_time')
         if submit_time:
             result['process_logs']['submit_time'] = submit_time
-            print(f"添加 submit_time: {submit_time}")
 
-        # 创建最终记录
         final_record = {
             'record_id': task_id,
             'timestamp': datetime.now().isoformat(),
@@ -118,30 +138,23 @@ def process_question_async(task_id, user_id, username, question, video_paths, co
             'video_paths': video_paths,
             'success': result.get('success', True),
             'model_result': result,
-            'status': 'completed'  # 标记为已完成
+            'status': 'completed'
         }
 
-        print(f"保存最终记录...")
-        # 更新记录（替换临时记录）
         qa_manager.update_record(user_id, task_id, final_record)
-        print(f"✅ 任务完成: {task_id}")
-        print(f"最终数据结构: {list(final_record.keys())}")
-        print(f"model_result 包含: {list(result.keys())}")
-        print(f"{'='*60}\n")
+        print(f"[QA] 任务完成: {task_id}")
 
-        # 更新任务状态
         running_tasks[task_id]['status'] = 'completed'
         running_tasks[task_id]['result'] = result
         running_tasks[task_id]['completed_at'] = datetime.now().isoformat()
 
+        cleanup_task(task_id)
+
     except Exception as e:
-        print(f"\n❌ 任务失败: {task_id}")
-        print(f"错误: {str(e)}")
+        print(f"[QA] 任务失败: {task_id}, 错误: {str(e)}")
         import traceback
         traceback.print_exc()
-        print(f"{'='*60}\n")
-        
-        # 处理失败
+
         error_record = {
             'success': False,
             'model_result': {
@@ -149,13 +162,15 @@ def process_question_async(task_id, user_id, username, question, video_paths, co
                 'error': str(e),
                 'answer': f'处理失败：{str(e)}'
             },
-            'status': 'failed'  # 标记为失败
+            'status': 'failed'
         }
         qa_manager.update_record(user_id, task_id, error_record)
 
         running_tasks[task_id]['status'] = 'failed'
         running_tasks[task_id]['error'] = str(e)
         running_tasks[task_id]['completed_at'] = datetime.now().isoformat()
+
+        cleanup_task(task_id)
 
 
 @qa_bp.route('/ask', methods=['POST'])
@@ -239,12 +254,15 @@ def ask():
         )
         thread.daemon = True
         thread.start()
-        
+
+        access_token = generate_task_token(task_id, uid)
+
         return jsonify({
             "code": 200,
             "msg": "问题已提交，正在处理中",
             "data": {
                 "task_id": task_id,
+                "task_token": access_token,
                 "status": "processing",
                 "record_id": task_id
             }
@@ -369,25 +387,19 @@ def get_record(record_id):
         record = next((r for r in records if r.get('record_id') == record_id), None)
         
         if not record:
-            print(f"警告：记录不存在 - 用户 {uid}, record_id {record_id}")
             return jsonify({
                 "code": 404,
                 "msg": "记录不存在",
                 "data": None
             }), 404
-        
-        print(f"返回记录 {record_id}: status={record.get('status')}, "
-              f"has_answer={bool(record.get('model_result', {}).get('answer'))}, "
-              f"has_process_logs={bool(record.get('model_result', {}).get('process_logs'))}")
-        
+
         return jsonify({
             "code": 200,
             "msg": "获取成功",
             "data": record
         })
-        
+
     except Exception as e:
-        print(f"获取记录出错: {str(e)}")
         return jsonify({
             "code": 500,
             "msg": f"服务器错误：{str(e)}",
@@ -470,15 +482,8 @@ def export_records():
         if not uid:
             return jsonify({"code":401, "msg":"未认证的用户", "data":None}), 401
 
-        print(f"\n[DEBUG] 导出请求:")
-        print(f"  用户名：{username} uid: {uid}")
-        print(f"  格式：{format_type}")
-
-        # 获取所有记录
         records = qa_manager.get_user_records(uid)
-        
-        print(f"  记录数：{len(records)}")
-        
+
         if not records:
             return jsonify({
                 "code": 404,
@@ -487,19 +492,20 @@ def export_records():
             }), 404
         
         if format_type == 'json':
-            # 创建临时 JSON 文件
             temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
-            json.dump(records, temp_file, ensure_ascii=False, indent=2)
-            temp_file.close()
-            
-            print(f"  临时文件：{temp_file.name}")
-            
-            return send_file(
-                temp_file.name,
-                mimetype='application/json',
-                as_attachment=True,
-                download_name=f'qa_records_{username}_{int(time.time())}.json'
-            )
+            try:
+                json.dump(records, temp_file, ensure_ascii=False, indent=2)
+                temp_file.close()
+
+                return send_file(
+                    temp_file.name,
+                    mimetype='application/json',
+                    as_attachment=True,
+                    download_name=f'qa_records_{username}_{int(time.time())}.json'
+                )
+            finally:
+                if os.path.exists(temp_file.name):
+                    os.remove(temp_file.name)
         else:
             return jsonify({
                 "code": 400,
@@ -509,10 +515,8 @@ def export_records():
         
     except Exception as e:
         import traceback
-        print(f"\n[ERROR] 导出失败:")
-        print(f"  错误：{e}")
         traceback.print_exc()
-        
+
         return jsonify({
             "code": 500,
             "msg": f"服务器错误：{str(e)}",
@@ -549,50 +553,40 @@ def get_task_progress(task_id):
 
 @qa_bp.route('/task/<task_id>/stream', methods=['GET'])
 def stream_task_progress(task_id):
-    """SSE 流式推送任务进度（支持无认证上流式数据，因浏览器EventSource限制）"""
+    """SSE 流式推送任务进度（使用 access_token 或 task_token 验证）"""
     try:
-        # 尝试从JWT获取认证，如果失败则允许继续（SSE需要特殊处理）
-        try:
-            uid = get_jwt_identity()
-        except:
-            uid = None
-        
-        # 如果没有JWT认证，根据task_id判断是否允许访问
-        # 仅允许查看正在进行的任务（不含敏感历史数据）
+        token = request.args.get('token')
+
+        if not token:
+            return jsonify({"error": "缺少 token"}), 401
+
+        if not validate_task_token(task_id, token):
+            return jsonify({"error": "无效或过期的 token"}), 401
+
         task = running_tasks.get(task_id)
         if not task:
-            # 尝试从请求参数获取token进行验证（备选方案）
-            token = request.args.get('token')
-            if not token:
-                return jsonify({"error": "任务不存在"}), 404
+            return jsonify({"error": "任务不存在"}), 404
 
         def generate():
-            """生成器函数：持续推送进度事件"""
             progress_queue = task.get('progress_queue')
-            
-            # SSE连接保活信号 - 包含 submit_time
+
             submit_time = task.get('submit_time', time.time())
             yield f"data: {json.dumps({'type': 'connected', 'task_id': task_id, 'submit_time': submit_time})}\n\n"
-            
-            # 不断推送新进度
+
             while True:
-                # 检查队列中是否有新的进度项
                 while progress_queue and not progress_queue.empty():
                     try:
                         item = progress_queue.get_nowait()
                         yield f"data: {json.dumps({'type': 'progress', 'data': item})}\n\n"
                     except:
                         break
-                
-                # 检查任务是否完成
+
                 if task.get('status') in ['completed', 'failed']:
-                    # 推送完成信号
                     yield f"data: {json.dumps({'type': 'complete', 'status': task.get('status'), 'result': task.get('result')})}\n\n"
                     break
-                
-                # 避免繁忙轮询
+
                 time.sleep(0.1)
-        
+
         return Response(generate(), mimetype='text/event-stream', headers={
             'Cache-Control': 'no-cache',
             'Connection': 'keep-alive',

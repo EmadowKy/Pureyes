@@ -80,38 +80,35 @@ def upload_video():
     video_file = request.files.get("video_file")
 
     if not uid:
-        return fail(code=401, msg="token无效或已过期")
+        return fail(message="token无效或已过期", code=401)
     if not video_name:
-        return fail(code=400, msg="缺少视频名称")
+        return fail(message="缺少视频名称", code=400)
     if not video_file:
-        return fail(code=400, msg="缺少视频文件")
+        return fail(message="缺少视频文件", code=400)
 
     try:
-        # 获取用户信息
         user = User.query.filter_by(id=int(uid)).first()
         if not user:
-            return fail(code=404, msg="用户不存在")
-        
-        # 获取文件大小
-        video_file.seek(0, 2)  # 移动到文件结尾
+            return fail(message="用户不存在", code=404)
+
+        video_file.seek(0, 2)
         file_size = video_file.tell()
-        video_file.seek(0)  # 重置到文件开头
-        
-        # 【验证1】检查单个视频大小限制
+        video_file.seek(0)
+
         if file_size > VIDEO_CONFIG['max_single_video_size']:
             max_size_mb = VIDEO_CONFIG['max_single_video_size'] / (1024 * 1024)
             current_size_mb = file_size / (1024 * 1024)
             return fail(
-                code=400, 
-                msg=f"视频文件过大。最大允许大小: {max_size_mb:.0f}MB，当前大小: {current_size_mb:.2f}MB"
+                message=f"视频文件过大。最大允许大小: {max_size_mb:.0f}MB，当前大小: {current_size_mb:.2f}MB",
+                code=400
             )
         
         # 【验证2】检查用户视频数量限制
         video_count = Video.query.filter_by(uid=uid).count()
         if video_count >= VIDEO_CONFIG['max_videos_per_user']:
             return fail(
-                code=400,
-                msg=f"您已达到上传数量限制（{VIDEO_CONFIG['max_videos_per_user']}个）。请删除部分视频后再试。"
+                message=f"您已达到上传数量限制（{VIDEO_CONFIG['max_videos_per_user']}个）。请删除部分视频后再试。",
+                code=400
             )
         
         # 【验证3】检查用户总存储限制
@@ -120,8 +117,8 @@ def upload_video():
             current_usage_gb = user.total_video_size / (1024 * 1024 * 1024)
             remaining_gb = (VIDEO_CONFIG['max_storage_per_user'] - user.total_video_size) / (1024 * 1024 * 1024)
             return fail(
-                code=400,
-                msg=f"存储空间不足。总限制: {max_storage_gb:.2f}GB，已用: {current_usage_gb:.2f}GB，剩余: {remaining_gb:.2f}GB，无法上传 {file_size / (1024 * 1024):.2f}MB 的视频"
+                message=f"存储空间不足。总限制: {max_storage_gb:.2f}GB，已用: {current_usage_gb:.2f}GB，剩余: {remaining_gb:.2f}GB，无法上传 {file_size / (1024 * 1024):.2f}MB 的视频",
+                code=400
             )
         
         video_id = str(uuid.uuid4()).replace("-", "")[:32]
@@ -153,9 +150,8 @@ def upload_video():
             video_id = video_id,
             uid = uid,
             video_name = video_name,
-            video_path = None,
             duration = duration,
-            file_size = file_size  # 保存文件大小
+            file_size = file_size
         )
         
         # 更新用户统计信息
@@ -164,10 +160,10 @@ def upload_video():
         
         db.session.add(video)
         db.session.commit()
-        return success(data = video.to_dict(), msg = "视频上传成功")
+        return success(data = video.to_dict(), message="视频上传成功")
     except Exception as e:
         db.session.rollback()
-        return fail(code=500, msg=f"视频上传失败：{str(e)}")
+        return fail(message=f"视频上传失败：{str(e)}", code=500)
 
 # 删除视频
 @jwt_required()
@@ -177,25 +173,22 @@ def delete_video():
 
     uid = get_jwt_identity()
     if not uid:
-        return fail(code=401, msg="token无效或已过期")
+        return fail(message="token无效或已过期", code=401)
     if not video_id:
-        return fail(code=400, msg="缺少视频ID")
+        return fail(message="缺少视频ID", code=400)
     
     try:
-        # 查询视频是否存在且属于当前用户
         video = Video.query.filter_by(video_id = video_id, uid = uid).first()
         if not video:
-            return fail(code = 404, msg = "视频不存在")
+            return fail(message="视频不存在", code=404)
         
-        # 从 video_id 直接构建路径
         absolute_video_path = os.path.join(VIDEO_PATH, f"{video_id}.mp4")
         
-        # 删除视频文件
         if os.path.exists(absolute_video_path):
             try:
                 os.remove(absolute_video_path)
             except Exception as file_e:
-                return fail(code=500, msg=f"视频文件删除失败：{str(file_e)}")
+                return fail(message=f"视频文件删除失败：{str(file_e)}", code=500)
         
         # 获取用户并更新统计信息
         user = User.query.filter_by(id=int(uid)).first()
@@ -206,10 +199,10 @@ def delete_video():
         # 删除数据库记录
         db.session.delete(video)
         db.session.commit() 
-        return success(msg = "视频删除成功")
+        return success(message="视频删除成功")
     except Exception as e:
         db.session.rollback() 
-        return fail(code=500, msg=f"视频删除失败：{str(e)}")
+        return fail(message=f"视频删除失败：{str(e)}", code=500)
 
 # 重命名视频
 @jwt_required()
@@ -220,29 +213,25 @@ def rename_video():
 
     uid = get_jwt_identity()
     if not uid:
-        return fail(code=401, msg="token无效或已过期")
+        return fail(message="token无效或已过期", code=401)
     if not video_id:
-        return fail(code=400, msg="缺少视频ID")
+        return fail(message="缺少视频ID", code=400)
     if not new_name:
-        return fail(code=400, msg="缺少新视频名称")
+        return fail(message="缺少新视频名称", code=400)
 
     try:
         video = Video.query.filter_by(video_id = video_id, uid = uid).first()
         if not video:
-            return fail(code = 404, msg = "视频不存在")
-        
-        # 从 video_id 直接构建路径
-        absolute_video_path = os.path.join(VIDEO_PATH, f"{video_id}.mp4")
-        
-        # 检查视频文件是否存在
-        if not os.path.exists(absolute_video_path):
-            return fail(code = 404, msg = "视频文件不存在")
+            return fail(message="视频不存在", code=404)
 
-        # 只更新数据库中的视频名称
+        absolute_video_path = os.path.join(VIDEO_PATH, f"{video_id}.mp4")
+
+        if not os.path.exists(absolute_video_path):
+            return fail(message="视频文件不存在", code=404)
+
         video.video_name = new_name
-        db.session.commit() 
-        
-        # 返回更新后的视频信息
+        db.session.commit()
+
         return success(
             data = {
                 "video_id": video.video_id,
@@ -251,11 +240,11 @@ def rename_video():
                 "video_path": f"uploads/{video.video_id}.mp4",
                 "duration": f"{int(video.duration // 60):02d}:{int(video.duration % 60):02d}"
             },
-            msg = "视频重命名成功"
+            message="视频重命名成功"
         )
     except Exception as e:
-        db.session.rollback() 
-        return fail(code=500, msg=f"视频重命名失败：{str(e)}")
+        db.session.rollback()
+        return fail(message=f"视频重命名失败：{str(e)}", code=500)
 
 # 勾选视频
 @jwt_required()
@@ -264,11 +253,11 @@ def tick_video():
     video_ids = data.get("video_ids", []) # 勾选视频的ID列表
     is_ticked = data.get("is_ticked")
     if not isinstance(video_ids, list) or not video_ids:
-        return fail(code=400, msg="视频ID列表不能为空")
+        return fail(message="视频ID列表不能为空", code=400)
 
     uid = get_jwt_identity()
     if not uid:
-        return fail(code=401, msg="token无效或已过期")
+        return fail(message="token无效或已过期", code=401)
     
     try:
         Video.query.filter(
@@ -276,14 +265,11 @@ def tick_video():
             Video.uid == uid
         ).update({"is_ticked": is_ticked}) 
         db.session.commit()
-        if is_ticked:
-            msg = "视频勾选成功"
-        else:
-            msg = "视频取消勾选成功"
-        return success(msg = msg)
+        message = "视频勾选成功" if is_ticked else "视频取消勾选成功"
+        return success(message=message)
     except Exception as e:
         db.session.rollback()
-        return fail(code=500, msg=f"视频勾选失败：{str(e)}")
+        return fail(message=f"视频勾选失败：{str(e)}", code=500)
 
 # 查看所有视频的列表
 @jwt_required()
@@ -295,23 +281,23 @@ def get_video_list():
     """
     uid = get_jwt_identity()
     if not uid:
-        return fail(code=401, msg="token无效或已过期")
+        return fail(message="token无效或已过期", code=401)
 
     try:
-        # 从数据库取用户上传的视频元数据
         videos = Video.query.filter_by(uid = uid).order_by(Video.upload_time.desc()).all()
         
         video_list = []
         for video in videos:
-            # 直接构建相对路径，不依赖数据库的 video_path 字段
             relative_video_path = f"uploads/{video.video_id}.mp4"
             
             video_list.append({
                 "video_id": video.video_id,
                 "uid": video.uid,
                 "video_name": video.video_name,
-                "video_path": relative_video_path,  # 统一格式相对路径
-                "duration": f"{int(video.duration // 60):02d}:{int(video.duration % 60):02d}"
+                "video_path": relative_video_path,
+                "duration": f"{int(video.duration // 60):02d}:{int(video.duration % 60):02d}",
+                "file_size": video.file_size,
+                "upload_time": video.upload_time.isoformat() if video.upload_time else None
             })
         
         total = len(video_list)
@@ -320,10 +306,10 @@ def get_video_list():
                 "videos": video_list,
                 "total": total
             },
-            msg = "获取视频列表成功"
+            message="获取视频列表成功"
         )
     except Exception as e:
-        return fail(code=500, msg=f"获取视频列表失败：{str(e)}")
+        return fail(message=f"获取视频列表失败：{str(e)}", code=500)
 
 # 查看单个视频
 @jwt_required()
@@ -331,14 +317,14 @@ def get_single_video():
     uid = get_jwt_identity()
     video_id = request.args.get("video_id")
     if not uid:
-        return fail(code=401, msg="token无效或已过期")
+        return fail(message="token无效或已过期", code=401)
     if not video_id:
-        return fail(code=400, msg="缺少视频ID")
+        return fail(message="缺少视频ID", code=400)
 
     try:
         video = Video.query.filter_by(video_id = video_id, uid = uid).first()
         if not video:
-            return fail(code = 404, msg = "视频不存在")
-        return success(data = video.to_dict(), msg = "获取视频信息成功")
+            return fail(message="视频不存在", code=404)
+        return success(data = video.to_dict(), message="获取视频信息成功")
     except Exception as e:
-        return fail(code=500, msg=f"获取视频信息失败：{str(e)}")
+        return fail(message=f"获取视频信息失败：{str(e)}", code=500)

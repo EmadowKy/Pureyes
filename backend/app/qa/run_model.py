@@ -20,61 +20,44 @@ def ask_model(question: str, video_paths: List[str], config_path: str,
                                   enable_memory_optimization: bool = True, 
                                   progress_callback=None) -> Dict[str, Any]:
     """
-    Analyze multiple videos based on a given question using the multi-video understanding model.
-    Passes all videos to the model at once for true multi-video joint analysis and comparison.
+    使用多视频理解模型分析多个视频。
+    将所有视频一次性传递给模型进行真正的多视频联合分析和对比。
     
     Args:
-        question (str): The question to analyze.
-        video_paths (List[str]): A list of relative paths to the video files (e.g., 'example/1.mp4').
-        config_path (str): Path to the configuration file for the model.
-        enable_memory_optimization (bool): Enable GPU memory optimization (default: True).
+        question (str): 要分析的问题。
+        video_paths (List[str]): 视频文件的相对路径列表（例如 'example/1.mp4'）。
+        config_path (str): 模型配置文件的路径。
+        enable_memory_optimization (bool): 启用 GPU 内存优化（默认为 True）。
 
     Returns:
-        Dict[str, Any]: The raw JSON response from the model.
+        Dict[str, Any]: 模型的原始 JSON 响应。
     """
-    print("=" * 60)
-    print("开始多视频联合分析...")
-    print(f"视频数量: {len(video_paths)}")
-    if torch.cuda.is_available():
-        print(f"GPU: {torch.cuda.get_device_name(0)}")
-        print(f"总显存: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
-    print("=" * 60)
-    
-    agent_runner = AgentRunner(config_path=config_path, device_id=0)
-
     if not video_paths:
         return {"error": "No video paths provided", "success": False}
-    
-    # 获取backend目录的绝对路径作为video_base_dir
+
     current_file = os.path.abspath(__file__)
-    # 向上三级：qa/run_model.py → app → backend
     backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_file)))
-    
-    # 直接传递相对路径给模型，backend_dir 作为基准目录
+
     sample = {
         "question": question,
         "video_paths": video_paths
     }
 
     try:
-        print(f"\n传入模型的视频路径: {video_paths}")
-        print(f"视频基准目录: {backend_dir}")
+        agent_runner = AgentRunner(config_path=config_path, device_id=0)
         result = agent_runner.run_on_sample(sample, video_base_dir=backend_dir, progress_callback=progress_callback)
-        
+
         if result.get("success", True) is False:
-            print(f"分析失败: {result.get('error', '未知错误')}")
-        else:
-            print(f"多视频分析完成")
-        
-        # Clear VRAM after processing
+            print(f"[ERROR] 多视频分析失败: {result.get('error', '未知错误')}")
+
         if enable_memory_optimization:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             gc.collect()
-        
+
         return result
     except Exception as e:
-        print(f"处理视频时出错: {e}")
+        print(f"[ERROR] 处理视频时出错: {e}")
         import traceback
         traceback.print_exc()
         return {"error": str(e), "success": False}
