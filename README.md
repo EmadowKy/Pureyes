@@ -345,3 +345,143 @@ Pureyes 使用基于 JWT 的用户认证系统，支持用户注册、登录、T
 | DELETE | /api/users/me | 删除当前用户 | Access Token |
 | GET | /api/users/config | 获取用户配置限制 | Access Token |
 
+## 视频管理系统
+
+Pureyes 的视频管理模块负责处理用户上传视频的存储、播放和管理。系统采用前后端分离架构，前端使用 Vue3 + Element Plus，后端使用 Flask + SQLAlchemy。
+
+### 数据模型
+
+**Video 模型**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| video_id | String(32) | 主键，UUID 前 32 位 |
+| uid | String(32) | 所属用户 ID |
+| video_name | String | 视频显示名称 |
+| video_path | String | 视频文件路径 |
+| upload_time | DateTime | 上传时间 |
+| duration | Float | 视频时长（秒） |
+| file_size | BigInteger | 文件大小（字节） |
+| is_ticked | Boolean | 是否被勾选 |
+
+### 上传视频原理
+
+**流程**
+
+```
+前端选择文件 → 验证格式/大小 → FormData 提交 → 后端多重校验 → 保存文件 → 入库 → 返回结果
+```
+
+1. **前端校验**
+   - 文件格式限制为 MP4
+   - 单个文件大小不超过 500MB
+   - 使用 Element Plus 的 el-upload 组件
+
+2. **后端校验（3 重验证）**
+   - 验证 1：单个文件大小检查
+   - 验证 2：用户视频数量限制（默认最多 30 个）
+   - 验证 3：用户总存储空间限制（默认 2GB）
+
+3. **文件处理**
+   - 使用 UUID 生成唯一 video_id（取前 32 位）
+   - 文件名格式：`{video_id}.mp4`
+   - 存储路径：`backend/uploads/{video_id}.mp4`
+   - 使用 OpenCV (`cv2.VideoCapture`) 提取视频时长
+
+4. **数据库操作**
+   - 创建 Video 记录
+   - 更新 User 表的 `total_video_size` 和 `video_count` 字段
+
+### 删除视频原理
+
+**流程**
+
+```
+前端确认删除 → 发送 video_id → 后端验证归属 → 删除物理文件 → 更新用户统计 → 删除数据库记录
+```
+
+1. 验证视频属于当前用户（防止跨用户删除）
+2. 删除物理视频文件 `uploads/{video_id}.mp4`
+3. 更新用户的存储统计（减去该视频占用的空间和数量）
+4. 删除数据库 Video 记录
+
+### 重命名视频原理
+
+**流程**
+
+```
+前端输入新名称 → 发送 video_id + new_name → 后端验证归属 → 更新数据库 → 返回新信息
+```
+
+- 仅修改数据库中的 `video_name` 字段
+- 物理文件名保持不变（`{video_id}.mp4`）
+- 需要验证视频文件实际存在
+
+### 视频播放原理
+
+**视频流服务 (`video_stream_routes.py`)**
+
+```
+前端请求 → 路径规范化 → 格式检查 → 兼容则直传 / 不兼容则转码 → 返回视频流
+```
+
+1. **路径规范化**
+   - 支持多种路径格式输入
+   - 统一转换为 `uploads/{video_id}.mp4` 相对路径
+   - 防止路径遍历攻击
+
+2. **格式兼容性检查**
+   - 使用 ffprobe 检测视频编码信息
+   - 支持 H.264 High/Baseline Profile + AAC 格式直接播放
+   - 其他格式需要转码
+
+3. **实时转码**
+   - 使用 ffmpeg 转码为浏览器兼容格式
+   - 输出配置：H.264 High Profile + AAC 音频 + moov 前置
+   - 线程池异步执行，最多 2 个并发转码任务
+
+4. **缓存机制**
+   - 转码后的文件缓存到 `temp/transcoded/` 目录
+   - 最多缓存 5 个转码文件
+   - LRU 策略自动清理旧缓存
+
+### 前端视频组件
+
+**VideoPlayer 组件 (`VideoPlayer.vue`)**
+
+- 基于原生 HTML5 `<video>` 元素封装
+- 支持播放/暂停/错误重试
+- 监听多种错误类型（网络错误、解码失败、格式不支持等）
+- 提供 `retry()` 方法用于自动重新加载
+
+**视频列表管理 (`IntegratedQA.vue`)**
+
+- 左侧边栏展示视频列表，支持滚动选择
+- 视频卡片显示：名称、时长、大小、上传时间
+- 操作按钮：重命名、删除
+- 点击视频切换播放器内容
+
+### API 端点
+
+| 方法 | 路径 | 说明 | 认证 |
+|------|------|------|------|
+| POST | /api/video-manage/upload | 上传视频 | Access Token |
+| POST | /api/video-manage/delete | 删除视频 | Access Token |
+| POST | /api/video-manage/rename | 重命名视频 | Access Token |
+| POST | /api/video-manage/tick | 勾选视频 | Access Token |
+| GET | /api/video-manage/list | 获取视频列表 | Access Token |
+| GET | /api/video-manage/info | 获取单个视频信息 | Access Token |
+| GET | /api/video/\<path\> | 视频流播放 | - |
+
+### 配置管理
+
+视频上传限制通过 `backend/configs/qa_storage.yaml` 配置文件管理：
+
+```yaml
+video:
+  max_single_video_size: 524288000    # 单个视频最大 500MB
+  max_storage_per_user: 2147483648    # 用户总存储最大 2GB
+  max_videos_per_user: 30              # 用户最多 30 个视频
+```
+
+
