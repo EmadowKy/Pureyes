@@ -484,4 +484,167 @@ video:
   max_videos_per_user: 30              # 用户最多 30 个视频
 ```
 
+## 视频问答功能
+
+视频问答模块提供了一套完整的交互流程，支持勾选视频提问、实时展示分析过程、管理问答记录等功能。
+
+### 功能概览
+
+| 功能 | 说明 |
+|------|------|
+| **勾选视频** | 从视频列表勾选要提问的视频，支持多选 |
+| **提问** | 输入问题后提交，后台异步处理 |
+| **实时进度** | 通过 SSE 流式推送分析进度，前端实时展示 |
+| **历史记录** | 保存所有问答记录，支持分页查看 |
+| **记录详情** | 查看单条记录的完整问答内容和分析过程 |
+| **删除记录** | 删除不需要的问答记录 |
+| **导出记录** | 将问答记录导出为 JSON 文件 |
+| **统计摘要** | 查看总提问数、成功数、失败数统计 |
+
+### 勾选视频提问流程
+
+**前端交互**
+
+1. 用户在视频列表左侧勾选一个或多个视频（通过视频卡片的复选框）
+2. 被勾选的视频 `is_ticked` 状态设为 `true`，视频卡片显示勾选标识
+3. 用户在问答区域输入问题
+4. 点击提交按钮，调用 `POST /api/qa/ask` 接口
+
+**后端处理**
+
+1. 验证用户身份（JWT）和问题内容
+2. 生成唯一 `task_id` 作为任务标识
+3. 创建临时记录（状态为 `processing`），立即保存到存储
+4. 启动后台线程异步调用 MVA 模型处理
+5. 返回 `task_id` 和 `task_token` 给前端
+
+**数据模型**
+
+问答记录结构：
+
+```json
+{
+  "record_id": "任务唯一ID",
+  "timestamp": "创建时间 ISO 格式",
+  "question": "用户问题",
+  "video_paths": ["视频路径列表"],
+  "success": null,
+  "model_result": {
+    "answer": "AI 正在分析中...",
+    "status": "processing"
+  },
+  "status": "processing"
+}
+```
+
+### 实时进度展示
+
+**SSE 流式推送**
+
+后端 `/api/qa/task/<task_id>/stream` 接口使用 Server-Sent Events（SSE）推送进度：
+
+```
+data: {"type": "connected", "task_id": "xxx", "submit_time": 1234567890}
+data: {"type": "progress", "data": {"stage": "initialization", ...}}
+data: {"type": "progress", "data": {"stage": "iteration", "iteration": 1, ...}}
+data: {"type": "complete", "status": "completed", "result": {...}}
+```
+
+**前端展示**
+
+- 使用 `EventSource` 订阅进度流
+- `RealtimeStreamProcessFlow` 组件实时渲染进度
+- 完成后自动切换到 `ProcessFlow` 组件显示完整分析过程
+
+### 问答记录管理
+
+**存储结构**
+
+每个用户的记录存储在 `output/qa_records/{uid}/qa_records.json`，按 uid 隔离存储。
+
+**记录操作 API**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | /api/qa/records | 获取记录列表（分页） |
+| GET | /api/qa/record/{id} | 获取单条记录详情 |
+| DELETE | /api/qa/record/{id} | 删除指定记录 |
+| GET | /api/qa/summary | 获取统计摘要 |
+| GET | /api/qa/export | 导出所有记录为 JSON |
+
+**删除记录**
+
+前端调用 `DELETE /api/qa/record/{record_id}`，后端根据 uid 和 record_id 查找并删除对应记录。
+
+**导出记录**
+
+调用 `GET /api/qa/export?format=json`，后端读取用户所有记录，生成临时 JSON 文件并返回下载。
+
+### 前端组件结构
+
+**IntegratedQA.vue 主组件**
+
+- 视频列表区域（左侧）：展示可勾选的视频卡片
+- 问答区域（右侧）：输入问题、提交按钮、实时进度展示
+- 记录列表视图：分页展示历史问答记录
+- 记录详情视图：展示单条记录的完整内容
+
+**关键函数**
+
+```javascript
+// 勾选视频
+await videoApi.tickVideos({ video_ids: [id], is_ticked: true })
+
+// 提交问题
+const res = await qaApi.askQuestion({ question, video_paths })
+
+// 订阅实时进度
+qaApi.subscribeTaskProgress(taskId, onProgress, onComplete, onError, token)
+
+// 查看记录详情
+const res = await qaApi.getRecord(recordId)
+
+// 删除记录
+await qaApi.deleteRecord(recordId)
+
+// 导出记录
+await qaApi.exportRecords('json')
+
+// 获取统计
+const res = await qaApi.getSummary()
+```
+
+### 后端关键模块
+
+**QAManager（qa_manager.py）**
+
+管理问答记录的持久化存储：
+
+- `save_temp_record()`：创建临时记录
+- `update_record()`：更新记录状态和结果
+- `delete_record()`：删除记录
+- `get_user_records()`：获取用户所有记录
+- `get_record_summary()`：获取统计数据
+
+**QA 路由（routes.py）**
+
+处理所有 QA 相关 HTTP 请求：
+
+- 异步任务管理（内存 + 持久化）
+- SSE 流式推送进度
+- 记录 CRUD 操作
+- 导出功能
+
+### 配置管理
+
+问答记录存储通过 `backend/configs/qa_storage.yaml` 配置：
+
+```yaml
+storage:
+  storage_dir: "output/qa_records"    # 记录存储目录
+  backup_dir: "output/qa_backups"     # 备份目录
+  max_records_per_user: 100           # 每用户最大记录数
+  enable_backup: true                  # 是否启用备份
+```
+
 
