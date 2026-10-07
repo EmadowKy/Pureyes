@@ -48,3 +48,8 @@ dist/
 .mypy_cache/
 
 *.zip
+frontend/test-results/
+frontend/playwright-report/
+scratch/
+frontend/.env.*
+!frontend/.env.example
