@@ -18,7 +18,10 @@ test("real server: login, shared clips, actual media decoding, faces, conversati
   await page
     .getByRole("combobox", { name: "当前小组" })
     .selectOption({ label: "test1" });
-  await page.getByRole("button", { name: /^test\s/ }).click();
+  await page
+    .locator(".workspace-card")
+    .filter({ has: page.getByRole("heading", { name: "test", exact: true }) })
+    .click();
   await expect(page.locator(".clip-card")).not.toHaveCount(0);
   await expect
     .poll(

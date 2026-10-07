@@ -299,15 +299,23 @@ onUnmounted(() => {
   <template v-if="tab === 'clips'"
     ><div class="card-grid">
       <article v-for="s in segments" :key="s.id" class="clip-card">
-        <button style="border: 0; padding: 0; width: 100%" @click="detail = s">
+        <button
+          class="clip-preview"
+          style="border: 0; padding: 0; width: 100%"
+          @click="detail = s"
+        >
           <img
             :src="mediaUrl(s.thumbnail_url)"
             :alt="s.remark || s.video_name"
             loading="lazy"
           />
+          <span class="preview-play"><Icon name="play" /></span>
+          <span class="preview-duration">{{ duration(s.duration) }}</span>
         </button>
         <div class="card-body">
-          <h3>{{ s.remark || s.video_name }}</h3>
+          <h3 :title="s.remark || s.video_name">
+            {{ s.remark || s.video_name }}
+          </h3>
           <p>
             {{ duration(s.duration) }} · {{ s.resolution }} ·
             {{ s.sample_fps }} FPS

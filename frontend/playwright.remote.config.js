@@ -5,6 +5,7 @@ if (!process.env.PUREYES_TEST_EMP_ID || !process.env.PUREYES_TEST_PASSWORD)
   );
 export default defineConfig({
   testDir: "./tests/remote",
+  outputDir: "./test-results/remote",
   timeout: 120000,
   workers: 1,
   use: {

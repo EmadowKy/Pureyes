@@ -30,6 +30,7 @@ const selectedGroup = computed(() =>
   groups.value.find((g) => g.id === Number(groupId.value)),
 );
 const workspaces = ref([]),
+  workspacePreviews = ref({}),
   workspace = ref(null),
   jumpConversation = ref(""),
   tasks = ref([]),
@@ -44,7 +45,8 @@ const nav = [
 ];
 let taskTimer,
   toastTimer,
-  taskBusy = false;
+  taskBusy = false,
+  workspaceLoadVersion = 0;
 const seenTasks = new Map();
 function notify(text) {
   toast.value = text;
@@ -104,14 +106,42 @@ async function logout() {
   ready.value = false;
 }
 async function loadWorkspaces() {
+  const version = ++workspaceLoadVersion;
   workspace.value = null;
   workspaces.value = [];
+  workspacePreviews.value = {};
   error.value = "";
   if (!groupId.value) return;
   const id = groupId.value;
   try {
     const rows = await api(`/workspaces/${id}`);
-    if (id === groupId.value) workspaces.value = rows;
+    if (id === groupId.value && version === workspaceLoadVersion) {
+      workspaces.value = rows;
+      let next = 0;
+      const current = () =>
+        session.token &&
+        id === groupId.value &&
+        version === workspaceLoadVersion;
+      const loadCovers = async () => {
+        while (current() && next < rows.length) {
+          const w = rows[next++];
+          try {
+            const clips = await api(`/workspaces/${w.id}/segments`);
+            if (current())
+              workspacePreviews.value[w.id] = {
+                count: clips.length,
+                cover: clips.find((clip) => clip.thumbnail_url)?.thumbnail_url,
+              };
+          } catch {
+            /* Workspace navigation remains available without a cover. */
+          }
+        }
+      };
+      // Load progressively without blocking navigation or flooding the API.
+      void Promise.all(
+        Array.from({ length: Math.min(3, rows.length) }, loadCovers),
+      );
+    }
   } catch (e) {
     error.value = e.message;
   }
@@ -317,12 +347,12 @@ onUnmounted(() => {
     </aside>
     <div class="main-shell">
       <header class="topbar">
-        <span
-          >{{ selectedGroup?.name || "清眸" }}
+        <span class="breadcrumb"
+          ><Icon name="group" />{{ selectedGroup?.name || "清眸" }}
           <span class="muted"
             >/ {{ nav.find((n) => n.id === page)?.label || "用户管理" }}</span
           ></span
-        ><button @click="taskPanel = !taskPanel">
+        ><button class="task-trigger" @click="taskPanel = !taskPanel">
           <Icon name="agent" />调查任务
           <span class="count">{{
             tasks.filter((t) => t.status === "processing").length
@@ -379,7 +409,7 @@ onUnmounted(() => {
             @notify="notify"
           />
           <template v-else
-            ><header class="page-heading">
+            ><header class="page-heading overview-heading">
               <div>
                 <p class="eyebrow">共享证据 · 连续调查</p>
                 <h1>调查工作区</h1>
@@ -393,6 +423,44 @@ onUnmounted(() => {
                 <Icon name="plus" />新建工作区
               </button>
             </header>
+            <div class="overview-summary">
+              <div>
+                <span class="summary-icon"><Icon name="workspace" /></span
+                ><span
+                  ><strong>{{ workspaces.length }}</strong> 个工作区</span
+                >
+              </div>
+              <div>
+                <span class="summary-icon"><Icon name="agent" /></span
+                ><span
+                  ><strong>{{
+                    workspaces.reduce((sum, w) => sum + (w.qa_count || 0), 0)
+                  }}</strong>
+                  轮调查记录</span
+                >
+              </div>
+              <span class="summary-status"
+                ><i
+                  :class="{
+                    working: tasks.some(
+                      (t) =>
+                        t.status === 'processing' &&
+                        t.group_id === Number(groupId),
+                    ),
+                  }"
+                />{{
+                  taskError
+                    ? "任务状态待刷新"
+                    : tasks.some(
+                          (t) =>
+                            t.status === "processing" &&
+                            t.group_id === Number(groupId),
+                        )
+                      ? "调查正在进行"
+                      : "当前无运行任务"
+                }}</span
+              >
+            </div>
             <div class="workspace-grid">
               <button
                 v-for="w in workspaces"
@@ -400,14 +468,36 @@ onUnmounted(() => {
                 class="workspace-card"
                 @click="workspace = w"
               >
-                <div class="card-mark">
-                  <Icon name="workspace" /><Icon name="chevron" />
+                <div
+                  class="workspace-cover"
+                  :class="{ 'has-cover': workspacePreviews[w.id]?.cover }"
+                >
+                  <img
+                    v-if="workspacePreviews[w.id]?.cover"
+                    :src="mediaUrl(workspacePreviews[w.id].cover)"
+                    alt="录像封面"
+                    loading="lazy"
+                    @error="workspacePreviews[w.id].cover = ''"
+                  />
+                  <div v-else class="folder-art"><Icon name="workspace" /></div>
+                  <span class="workspace-cover-label"
+                    ><Icon name="clip" />{{
+                      workspacePreviews[w.id]
+                        ? workspacePreviews[w.id].count + " 个片段"
+                        : "共享工作区"
+                    }}</span
+                  >
                 </div>
-                <h2>{{ w.name }}</h2>
-                <p>{{ w.qa_count || 0 }} 轮调查</p>
-                <footer>
-                  {{ dateTime(w.created_at) }}<span>进入工作区 →</span>
-                </footer>
+                <div class="workspace-card-content">
+                  <div class="card-mark">
+                    <span>视频调查</span><Icon name="chevron" />
+                  </div>
+                  <h2>{{ w.name }}</h2>
+                  <p>{{ w.qa_count || 0 }} 轮调查</p>
+                  <footer>
+                    {{ dateTime(w.created_at) }}<span>进入工作区 →</span>
+                  </footer>
+                </div>
               </button>
             </div>
             <div v-if="!workspaces.length" class="empty">
