@@ -112,7 +112,12 @@ export function mediaUrl(value) {
     return "";
   }
   if (!["http:", "https:"].includes(url.protocol)) return "";
-  if (session.server === "" && url.origin === "http://116.62.178.139")
+  if (
+    session.server === "" &&
+    url.origin === "http://116.62.178.139" &&
+    (url.pathname.startsWith("/api/") ||
+      url.pathname.startsWith("/demo-assets/"))
+  )
     return url.pathname + url.search;
   return url.href;
 }

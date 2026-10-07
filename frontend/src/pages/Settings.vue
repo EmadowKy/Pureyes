@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref } from "vue";
 import { api, session } from "../lib/api";
 import Modal from "../components/Modal.vue";
+import UserAvatar from "../components/UserAvatar.vue";
 const props = defineProps({ group: Object }),
   emit = defineEmits(["notify", "logout"]);
 const profile = reactive({
@@ -177,6 +178,7 @@ onMounted(() => {
     </header>
     <section class="panel">
       <h2>个人资料</h2>
+      <UserAvatar :src="profile.avatar" :name="profile.name" />
       <form @submit.prevent="saveProfile">
         <div class="row">
           <label>姓名<input v-model="profile.name" required /></label

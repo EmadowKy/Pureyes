@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-async function setup(page) {
+async function setup(page, avatar = "") {
   const state = { submitted: [], renamed: [], progress: false, requests: [] };
   const user = {
     emp_id: "tester",
@@ -8,6 +8,7 @@ async function setup(page) {
     role: "super_admin",
     is_active: true,
     screen_capture_allowed: false,
+    avatar,
   };
   const segments = [1, 2].map((id) => ({
     id,
@@ -210,6 +211,46 @@ async function setup(page) {
 async function workspace(page) {
   await page.getByRole("button", { name: /test.*进入工作区/ }).click();
 }
+
+test("server-hosted avatar retains its static path and renders in profile views", async ({
+  page,
+}) => {
+  await page.route("**/demo-assets/avatars/admin.svg", (route) =>
+    route.fulfill({
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><circle cx="32" cy="32" r="32" fill="#3371cc"/></svg>',
+    }),
+  );
+  await setup(page, "http://116.62.178.139/demo-assets/avatars/admin.svg");
+  const avatar = page.locator(".account img.user-avatar");
+  await expect(avatar).toHaveAttribute("src", "/demo-assets/avatars/admin.svg");
+  await expect
+    .poll(
+      () =>
+        avatar.evaluate((image) => image.complete && image.naturalWidth > 0),
+      { timeout: 30000 },
+    )
+    .toBe(true);
+  await page.getByRole("button", { name: "账号与模型", exact: true }).click();
+  await expect
+    .poll(() =>
+      page
+        .locator(".settings-layout img.user-avatar")
+        .evaluate((image) => image.complete && image.naturalWidth > 0),
+    )
+    .toBe(true);
+});
+
+test("broken avatars show the user's initial instead of a broken image", async ({
+  page,
+}) => {
+  await page.route("**/demo-assets/avatars/missing.svg", (route) =>
+    route.fulfill({ status: 404, body: "" }),
+  );
+  await setup(page, "http://116.62.178.139/demo-assets/avatars/missing.svg");
+  await expect(page.locator(".account .user-avatar")).toHaveText("网");
+  await expect(page.locator(".account img.user-avatar")).toHaveCount(0);
+});
 test("workspace, face records, parameters, citations and sanitized answer", async ({
   page,
 }) => {

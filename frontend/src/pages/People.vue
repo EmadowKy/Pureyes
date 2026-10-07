@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, reactive, ref } from "vue";
-import { api, session, mediaUrl } from "../lib/api";
+import { api, session } from "../lib/api";
+import UserAvatar from "../components/UserAvatar.vue";
 import { statusLabel } from "../lib/format";
 import Icon from "../components/Icon.vue";
 import Modal from "../components/Modal.vue";
@@ -295,13 +296,7 @@ onMounted(load);
           <tr v-for="u in rows" :key="u.emp_id">
             <td>
               <button class="icon-button" @click="info = u">
-                <img
-                  v-if="u.avatar"
-                  :src="mediaUrl(u.avatar)"
-                  alt="头像"
-                  width="32"
-                  height="32"
-                />{{ u.name }}
+                <UserAvatar :src="u.avatar" :name="u.name" />{{ u.name }}
               </button>
             </td>
             <td>{{ u.emp_id }}</td>

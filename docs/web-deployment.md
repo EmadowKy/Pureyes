@@ -29,6 +29,10 @@ server {
         proxy_buffering off;
         proxy_request_buffering off;
     }
+
+    location /demo-assets/ {
+        alias /var/www/docs/demo-assets/;
+    }
 }
 ```
 
@@ -38,6 +42,7 @@ server {
 
 - 浏览器用 `Authorization: Bearer` 调用业务 API。令牌存于当前标签页的 sessionStorage，刷新后可继续登录。
 - 媒体请求使用后端生成的限时签名，不向视频 URL 拼接 JWT。
+- 现有演示账号头像通过 `/demo-assets/avatars/` 提供，静态目录与 API 分别配置，避免头像请求被网页首页接管。
 - 签名失效后播放器通过 `/api/video/access` 续期。该接口继续检查小组权限。
 - HLS 使用浏览器原生能力或 hls.js，录像按原比例显示。
 - 不要在反向代理缓存登录、模型配置或已鉴权业务响应。

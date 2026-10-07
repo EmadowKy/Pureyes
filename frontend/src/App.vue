@@ -1,4 +1,5 @@
 <script setup>
+import UserAvatar from "./components/UserAvatar.vue";
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import {
   api,
@@ -330,12 +331,7 @@ onUnmounted(() => {
         >使用文档 ↗</a
       >
       <div class="account">
-        <img
-          v-if="session.user.avatar"
-          :src="mediaUrl(session.user.avatar)"
-          alt="头像"
-        />
-        <div v-else class="avatar">{{ session.user.name?.slice(0, 1) }}</div>
+        <UserAvatar :src="session.user.avatar" :name="session.user.name" />
         <div>
           <strong>{{ session.user.name }}</strong
           ><small>{{ session.user.emp_id }}</small>

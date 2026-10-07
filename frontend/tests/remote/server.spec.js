@@ -4,7 +4,23 @@ test("real server: login, shared clips, actual media decoding, faces, conversati
 }) => {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  const avatarResponse = await page.request.get(
+    "/demo-assets/avatars/admin.svg",
+  );
+  expect(avatarResponse.ok()).toBe(true);
+  expect(avatarResponse.headers()["content-type"]).toContain("image/svg+xml");
   await page.goto("/");
+  expect(
+    await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          const image = new Image();
+          image.onload = () => resolve(image.naturalWidth > 0);
+          image.onerror = () => resolve(false);
+          image.src = "/demo-assets/avatars/admin.svg";
+        }),
+    ),
+  ).toBe(true);
   await page
     .getByLabel("工号", { exact: true })
     .fill(process.env.PUREYES_TEST_EMP_ID);
