@@ -24,6 +24,11 @@ const paths = {
   search: "M10 17a7 7 0 1 0 0-14 7 7 0 0 0 0 14 M15 15l6 6",
   fullscreen: "M3 8V3h5 M16 3h5v5 M21 16v5h-5 M8 21H3v-5",
   logout: "M9 3H3v18h6 M13 7l5 5-5 5 M8 12h13",
+  menu: "M4 6h16 M4 12h16 M4 18h16",
+  panel: "M3 4h18v16H3Z M9 4v16 m7-11-3 3 3 3",
+  grid: "M3 3h7v7H3Z M14 3h7v7h-7Z M3 14h7v7H3Z M14 14h7v7h-7Z",
+  list: "M3 5h3 M10 5h11 M3 12h3 M10 12h11 M3 19h3 M10 19h11",
+  down: "m5 9 7 7 7-7",
 };
 </script>
 <template>

@@ -1,6 +1,14 @@
 <script setup>
 import UserAvatar from "./components/UserAvatar.vue";
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  reactive,
+  ref,
+  watch,
+} from "vue";
 import {
   api,
   clearSession,
@@ -15,6 +23,8 @@ import Workspace from "./pages/Workspace.vue";
 import Monitors from "./pages/Monitors.vue";
 import People from "./pages/People.vue";
 import Settings from "./pages/Settings.vue";
+import Modal from "./components/Modal.vue";
+import { lockPageScroll, trapFocus } from "./lib/overlay";
 const page = ref("workspace"),
   groups = ref([]),
   groupId = ref(""),
@@ -22,6 +32,59 @@ const page = ref("workspace"),
   busy = ref(false),
   error = ref(""),
   toast = ref("");
+const compactNav = ref(localStorage.getItem("pureyes.compact-nav") === "true"),
+  mobile = ref(matchMedia("(max-width: 760px)").matches),
+  navOpen = ref(false),
+  navPanel = ref(null),
+  navToggle = ref(null),
+  workspaceSearch = ref(""),
+  workspaceLoading = ref(false),
+  workspaceForm = ref(false),
+  workspaceName = ref(""),
+  workspaceSaving = ref(false);
+const visibleWorkspaces = computed(() =>
+  workspaces.value.filter((w) =>
+    w.name.toLowerCase().includes(workspaceSearch.value.trim().toLowerCase()),
+  ),
+);
+const screenQuery = matchMedia("(max-width: 760px)");
+let releaseNavScroll;
+function updateViewport(event) {
+  mobile.value = event.matches;
+  navOpen.value = false;
+}
+function toggleNav() {
+  if (mobile.value) navOpen.value = !navOpen.value;
+  else {
+    compactNav.value = !compactNav.value;
+    localStorage.setItem("pureyes.compact-nav", String(compactNav.value));
+  }
+}
+function navigationKey(event) {
+  if (mobile.value && navOpen.value) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      navOpen.value = false;
+    }
+    trapFocus(event, navPanel.value);
+  } else if (event.key === "Escape" && taskPanel.value) taskPanel.value = false;
+}
+watch(navOpen, async (value) => {
+  releaseNavScroll?.();
+  releaseNavScroll = undefined;
+  if (value && mobile.value) {
+    releaseNavScroll = lockPageScroll();
+    await nextTick();
+    navPanel.value?.querySelector("button")?.focus();
+  } else if (mobile.value) {
+    await nextTick();
+    navToggle.value?.focus({ preventScroll: true });
+  }
+});
+watch(page, () => {
+  navOpen.value = false;
+  taskPanel.value = false;
+});
 const credentials = reactive({
   emp_id: "",
   password: "",
@@ -93,6 +156,7 @@ async function login() {
   }
 }
 async function logout() {
+  navOpen.value = false;
   try {
     await api("/auth/logout", { method: "POST" });
   } catch (e) {
@@ -111,6 +175,8 @@ async function loadWorkspaces() {
   workspace.value = null;
   workspaces.value = [];
   workspacePreviews.value = {};
+  workspaceSearch.value = "";
+  workspaceLoading.value = !!groupId.value;
   error.value = "";
   if (!groupId.value) return;
   const id = groupId.value;
@@ -144,21 +210,31 @@ async function loadWorkspaces() {
       );
     }
   } catch (e) {
-    error.value = e.message;
+    if (version === workspaceLoadVersion) error.value = e.message;
+  } finally {
+    if (version === workspaceLoadVersion) workspaceLoading.value = false;
   }
 }
 async function newWorkspace() {
-  const name = prompt("工作区名称")?.trim();
+  workspaceName.value = "";
+  workspaceForm.value = true;
+}
+async function saveWorkspace() {
+  const name = workspaceName.value.trim();
   if (!name) return;
+  workspaceSaving.value = true;
   try {
     await api(`/workspaces/${groupId.value}`, {
       method: "POST",
       body: { name },
     });
     await loadWorkspaces();
+    workspaceForm.value = false;
     notify("工作区已创建");
   } catch (e) {
     notify(e.message);
+  } finally {
+    workspaceSaving.value = false;
   }
 }
 async function refreshGroups() {
@@ -228,10 +304,15 @@ watch(
   },
 );
 onMounted(async () => {
+  screenQuery.addEventListener("change", updateViewport);
+  document.addEventListener("keydown", navigationKey);
   if (session.token) await boot();
   taskTimer = setInterval(refreshTasks, 5000);
 });
 onUnmounted(() => {
+  screenQuery.removeEventListener("change", updateViewport);
+  document.removeEventListener("keydown", navigationKey);
+  releaseNavScroll?.();
   clearInterval(taskTimer);
   clearTimeout(toastTimer);
 });
@@ -292,245 +373,376 @@ onUnmounted(() => {
       </form>
     </section>
   </main>
-  <div v-else class="app-shell">
-    <aside class="sidebar">
-      <div class="brand">
-        <img src="/logo.png" alt="清眸" /><span
-          >清眸<small>PUREYES</small></span
-        >
-      </div>
-      <label class="group-picker"
-        >当前小组<select v-model="groupId">
-          <option v-if="!groups.length" value="">尚未加入小组</option>
-          <option v-for="g in groups" :key="g.id" :value="g.id">
-            {{ g.name }}
-          </option>
-        </select></label
+  <div
+    v-else
+    class="app-shell"
+    :class="{ 'compact-nav': compactNav && !mobile }"
+  >
+    <Transition name="nav-mask"
+      ><div v-if="mobile && navOpen" class="nav-mask" @click="navOpen = false"
+    /></Transition>
+    <Transition name="navigation"
+      ><aside
+        v-show="!mobile || navOpen"
+        ref="navPanel"
+        class="sidebar"
+        :class="{ 'mobile-open': mobile && navOpen }"
+        :role="mobile ? 'dialog' : undefined"
+        :aria-modal="mobile ? true : undefined"
+        aria-label="主导航"
       >
-      <nav>
         <button
-          v-for="item in nav"
-          :key="item.id"
-          :class="{ active: page === item.id }"
-          @click="page = item.id"
+          v-if="mobile"
+          class="nav-close icon-button"
+          aria-label="关闭导航"
+          @click="navOpen = false"
         >
-          <Icon :name="item.icon" />{{ item.label }}</button
-        ><button
-          v-if="['admin', 'super_admin'].includes(session.user?.role)"
-          :class="{ active: page === 'admin' }"
-          @click="page = 'admin'"
-        >
-          <Icon name="lock" />用户管理
+          <Icon name="close" />
         </button>
-      </nav>
-      <a
-        class="docs-link"
-        href="http://116.62.178.139/"
-        target="_blank"
-        rel="noopener"
-        >使用文档 ↗</a
-      >
-      <div class="account">
-        <UserAvatar :src="session.user.avatar" :name="session.user.name" />
-        <div>
-          <strong>{{ session.user.name }}</strong
-          ><small>{{ session.user.emp_id }}</small>
+        <div class="brand">
+          <img src="/logo.png" alt="清眸" /><span
+            >清眸<small>PUREYES</small></span
+          >
         </div>
-        <button class="icon-button" aria-label="退出登录" @click="logout">
-          <Icon name="logout" />
+        <button
+          v-if="compactNav && !mobile"
+          class="compact-group"
+          title="展开小组选择"
+          aria-label="展开小组选择"
+          @click="toggleNav"
+        >
+          {{ selectedGroup?.name?.slice(0, 2) || "小组" }}
         </button>
-      </div>
-    </aside>
-    <div class="main-shell">
+        <label class="group-picker"
+          >当前小组<select v-model="groupId">
+            <option v-if="!groups.length" value="">尚未加入小组</option>
+            <option v-for="g in groups" :key="g.id" :value="g.id">
+              {{ g.name }}
+            </option>
+          </select></label
+        >
+        <nav>
+          <button
+            v-for="item in nav"
+            :key="item.id"
+            :class="{ active: page === item.id }"
+            :aria-label="item.label"
+            :title="compactNav ? item.label : undefined"
+            :aria-current="page === item.id ? 'page' : undefined"
+            @click="
+              page = item.id;
+              navOpen = false;
+            "
+          >
+            <Icon :name="item.icon" /><span class="nav-label">{{
+              item.label
+            }}</span></button
+          ><button
+            v-if="['admin', 'super_admin'].includes(session.user?.role)"
+            :class="{ active: page === 'admin' }"
+            aria-label="用户管理"
+            :aria-current="page === 'admin' ? 'page' : undefined"
+            @click="
+              page = 'admin';
+              navOpen = false;
+            "
+          >
+            <Icon name="lock" /><span class="nav-label">用户管理</span>
+          </button>
+        </nav>
+        <a
+          class="docs-link"
+          href="http://116.62.178.139/"
+          target="_blank"
+          rel="noopener"
+          title="使用文档"
+          >使用文档 ↗</a
+        >
+        <div class="account">
+          <UserAvatar :src="session.user.avatar" :name="session.user.name" />
+          <div>
+            <strong>{{ session.user.name }}</strong
+            ><small>{{ session.user.emp_id }}</small>
+          </div>
+          <button class="icon-button" aria-label="退出登录" @click="logout">
+            <Icon name="logout" />
+          </button>
+        </div></aside
+    ></Transition>
+    <div class="main-shell" :inert="mobile && navOpen">
       <header class="topbar">
+        <button
+          ref="navToggle"
+          class="nav-toggle icon-button"
+          :aria-label="
+            mobile ? '打开导航' : compactNav ? '展开导航' : '收起导航'
+          "
+          :aria-expanded="mobile ? navOpen : !compactNav"
+          @click="toggleNav"
+        >
+          <Icon :name="mobile ? 'menu' : 'panel'" />
+        </button>
         <span class="breadcrumb"
           ><Icon name="group" />{{ selectedGroup?.name || "清眸" }}
           <span class="muted"
             >/ {{ nav.find((n) => n.id === page)?.label || "用户管理" }}</span
           ></span
-        ><button class="task-trigger" @click="taskPanel = !taskPanel">
+        ><button
+          class="task-trigger"
+          :aria-expanded="taskPanel"
+          aria-controls="task-panel"
+          @click="taskPanel = !taskPanel"
+        >
           <Icon name="agent" />调查任务
           <span class="count">{{
             tasks.filter((t) => t.status === "processing").length
           }}</span>
         </button>
       </header>
-      <section v-if="taskPanel" class="task-panel">
-        <header>
-          <h2>调查任务</h2>
-          <button @click="allowNotifications">开启系统通知</button
-          ><button aria-label="刷新任务" @click="refreshTasks">
-            <Icon name="refresh" />
-          </button>
-        </header>
-        <p v-if="taskError" class="error">{{ taskError }}</p>
-        <div
-          v-for="t in tasks"
-          :key="t.task_id"
-          class="task-row"
-          @click="openTask(t)"
-          @keydown.enter="openTask(t)"
-          tabindex="0"
-          role="button"
-        >
-          <Icon name="agent" />
-          <div>
-            <strong>{{ t.title }}</strong>
-            <p>
-              {{ t.stage }} · {{ t.steps }} 步 ·
-              {{ duration(t.elapsed_seconds) }}
-            </p>
-          </div>
-          <span :class="['badge', t.status]">{{ statusLabel(t.status) }}</span>
-        </div>
-        <p v-if="!tasks.length" class="empty">暂无调查任务</p>
-        <p class="muted">
-          网页打开期间同步进度；关闭网页后，服务端调查仍继续。
-        </p>
-      </section>
-      <div class="page-content">
-        <p v-if="error" class="error" role="alert">
-          {{ error }} <button @click="loadWorkspaces">重试</button>
-        </p>
-        <template v-if="page === 'workspace'"
-          ><Workspace
-            v-if="workspace"
-            :key="workspace.id"
-            :workspace="workspace"
-            :jump-conversation="jumpConversation"
-            @back="
-              workspace = null;
-              jumpConversation = '';
-            "
-            @notify="notify"
-          />
-          <template v-else
-            ><header class="page-heading overview-heading">
-              <div>
-                <p class="eyebrow">共享证据 · 连续调查</p>
-                <h1>调查工作区</h1>
-                <p>把相关录像与线索放在一起，让团队沿着证据继续追问。</p>
-              </div>
-              <button
-                class="primary"
-                :disabled="!groupId"
-                @click="newWorkspace"
-              >
-                <Icon name="plus" />新建工作区
-              </button>
-            </header>
-            <div class="overview-summary">
-              <div>
-                <span class="summary-icon"><Icon name="workspace" /></span
-                ><span
-                  ><strong>{{ workspaces.length }}</strong> 个工作区</span
-                >
-              </div>
-              <div>
-                <span class="summary-icon"><Icon name="agent" /></span
-                ><span
-                  ><strong>{{
-                    workspaces.reduce((sum, w) => sum + (w.qa_count || 0), 0)
-                  }}</strong>
-                  轮调查记录</span
-                >
-              </div>
-              <span class="summary-status"
-                ><i
-                  :class="{
-                    working: tasks.some(
-                      (t) =>
-                        t.status === 'processing' &&
-                        t.group_id === Number(groupId),
-                    ),
-                  }"
-                />{{
-                  taskError
-                    ? "任务状态待刷新"
-                    : tasks.some(
-                          (t) =>
-                            t.status === "processing" &&
-                            t.group_id === Number(groupId),
-                        )
-                      ? "调查正在进行"
-                      : "当前无运行任务"
-                }}</span
-              >
+      <Transition name="panel"
+        ><section v-if="taskPanel" id="task-panel" class="task-panel">
+          <header>
+            <h2>调查任务</h2>
+            <button @click="allowNotifications">开启系统通知</button
+            ><button aria-label="刷新任务" @click="refreshTasks">
+              <Icon name="refresh" /></button
+            ><button
+              class="icon-button"
+              aria-label="关闭任务面板"
+              @click="taskPanel = false"
+            >
+              <Icon name="close" />
+            </button>
+          </header>
+          <p v-if="taskError" class="error">{{ taskError }}</p>
+          <div
+            v-for="t in tasks"
+            :key="t.task_id"
+            class="task-row"
+            @click="openTask(t)"
+            @keydown.enter="openTask(t)"
+            @keydown.space.prevent="openTask(t)"
+            tabindex="0"
+            role="button"
+          >
+            <Icon name="agent" />
+            <div>
+              <strong>{{ t.title }}</strong>
+              <p>
+                {{ t.stage }} · {{ t.steps }} 步 ·
+                {{ duration(t.elapsed_seconds) }}
+              </p>
             </div>
-            <div class="workspace-grid">
-              <button
-                v-for="w in workspaces"
-                :key="w.id"
-                class="workspace-card"
-                @click="workspace = w"
-              >
-                <div
-                  class="workspace-cover"
-                  :class="{ 'has-cover': workspacePreviews[w.id]?.cover }"
+            <span :class="['badge', t.status]">{{
+              statusLabel(t.status)
+            }}</span>
+          </div>
+          <p v-if="!tasks.length" class="empty">暂无调查任务</p>
+          <p class="muted">
+            网页打开期间同步进度；关闭网页后，服务端调查仍继续。
+          </p>
+        </section></Transition
+      >
+      <Transition name="page" mode="out-in"
+        ><div
+          :key="
+            page +
+            (page === 'workspace' ? ':' + (workspace?.id || 'overview') : '')
+          "
+          class="page-content"
+        >
+          <p v-if="error" class="error" role="alert">
+            {{ error }} <button @click="loadWorkspaces">重试</button>
+          </p>
+          <template v-if="page === 'workspace'"
+            ><Workspace
+              v-if="workspace"
+              :key="workspace.id"
+              :workspace="workspace"
+              :jump-conversation="jumpConversation"
+              @back="
+                workspace = null;
+                jumpConversation = '';
+              "
+              @notify="notify"
+            />
+            <template v-else
+              ><header class="page-heading overview-heading">
+                <div>
+                  <p class="eyebrow">共享证据 · 连续调查</p>
+                  <h1>调查工作区</h1>
+                  <p>把相关录像与线索放在一起，让团队沿着证据继续追问。</p>
+                </div>
+                <button
+                  class="primary"
+                  :disabled="!groupId"
+                  @click="newWorkspace"
                 >
-                  <img
-                    v-if="workspacePreviews[w.id]?.cover"
-                    :src="mediaUrl(workspacePreviews[w.id].cover)"
-                    alt="录像封面"
-                    loading="lazy"
-                    @error="workspacePreviews[w.id].cover = ''"
-                  />
-                  <div v-else class="folder-art"><Icon name="workspace" /></div>
-                  <span class="workspace-cover-label"
-                    ><Icon name="clip" />{{
-                      workspacePreviews[w.id]
-                        ? workspacePreviews[w.id].count + " 个片段"
-                        : "共享工作区"
-                    }}</span
+                  <Icon name="plus" />新建工作区
+                </button>
+              </header>
+              <div class="overview-summary">
+                <div>
+                  <span class="summary-icon"><Icon name="workspace" /></span
+                  ><span
+                    ><strong>{{ workspaces.length }}</strong> 个工作区</span
                   >
                 </div>
-                <div class="workspace-card-content">
-                  <div class="card-mark">
-                    <span>视频调查</span><Icon name="chevron" />
-                  </div>
-                  <h2>{{ w.name }}</h2>
-                  <p>{{ w.qa_count || 0 }} 轮调查</p>
-                  <footer>
-                    {{ dateTime(w.created_at) }}<span>进入工作区 →</span>
-                  </footer>
+                <div>
+                  <span class="summary-icon"><Icon name="agent" /></span
+                  ><span
+                    ><strong>{{
+                      workspaces.reduce((sum, w) => sum + (w.qa_count || 0), 0)
+                    }}</strong>
+                    轮调查记录</span
+                  >
                 </div>
-              </button>
-            </div>
-            <div v-if="!workspaces.length" class="empty">
-              <Icon name="workspace" />
-              <h2>为调查建立一个工作区</h2>
-              <p>
-                {{
-                  groupId
-                    ? "上传视频或截取监控录像，开始整理证据。"
-                    : "先创建小组或在我的消息中接受邀请。"
-                }}
-              </p>
-            </div></template
-          >
-        </template>
-        <Monitors
-          v-else-if="page === 'monitor'"
-          :key="groupId"
-          :group="selectedGroup"
-          @notify="notify"
-        />
-        <People
-          v-else-if="['group', 'messages', 'admin'].includes(page)"
-          :key="page + groupId"
-          :mode="page"
-          :group="selectedGroup"
-          @notify="notify"
-          @groups-changed="refreshGroups"
-        />
-        <Settings
-          v-else
-          :group="selectedGroup"
-          @notify="notify"
-          @logout="logout"
-        />
-      </div>
+                <span class="summary-status"
+                  ><i
+                    :class="{
+                      working: tasks.some(
+                        (t) =>
+                          t.status === 'processing' &&
+                          t.group_id === Number(groupId),
+                      ),
+                    }"
+                  />{{
+                    taskError
+                      ? "任务状态待刷新"
+                      : tasks.some(
+                            (t) =>
+                              t.status === "processing" &&
+                              t.group_id === Number(groupId),
+                          )
+                        ? "调查正在进行"
+                        : "当前无运行任务"
+                  }}</span
+                >
+              </div>
+              <div class="library-toolbar overview-toolbar">
+                <label class="search-field"
+                  ><Icon name="search" /><input
+                    v-model="workspaceSearch"
+                    aria-label="搜索工作区"
+                    placeholder="查找工作区…"
+                    type="search"
+                /></label>
+                <span class="muted">{{
+                  workspaceLoading
+                    ? "正在加载…"
+                    : `${visibleWorkspaces.length} 个工作区`
+                }}</span>
+              </div>
+              <div
+                v-if="workspaceLoading"
+                class="workspace-grid skeleton-grid"
+                aria-label="正在加载工作区"
+                aria-busy="true"
+              >
+                <div v-for="n in 3" :key="n" class="skeleton-card">
+                  <div />
+                  <i /><i />
+                </div>
+              </div>
+              <div v-else class="workspace-grid">
+                <button
+                  v-for="w in visibleWorkspaces"
+                  :key="w.id"
+                  class="workspace-card"
+                  @click="workspace = w"
+                >
+                  <div
+                    class="workspace-cover"
+                    :class="{ 'has-cover': workspacePreviews[w.id]?.cover }"
+                  >
+                    <img
+                      v-if="workspacePreviews[w.id]?.cover"
+                      :src="mediaUrl(workspacePreviews[w.id].cover)"
+                      alt="录像封面"
+                      loading="lazy"
+                      @error="workspacePreviews[w.id].cover = ''"
+                    />
+                    <div v-else class="folder-art">
+                      <Icon name="workspace" />
+                    </div>
+                    <span class="workspace-cover-label"
+                      ><Icon name="clip" />{{
+                        workspacePreviews[w.id]
+                          ? workspacePreviews[w.id].count + " 个片段"
+                          : "共享工作区"
+                      }}</span
+                    >
+                  </div>
+                  <div class="workspace-card-content">
+                    <div class="card-mark">
+                      <span>视频调查</span><Icon name="chevron" />
+                    </div>
+                    <h2>{{ w.name }}</h2>
+                    <p>{{ w.qa_count || 0 }} 轮调查</p>
+                    <footer>
+                      {{ dateTime(w.created_at) }}<span>进入工作区 →</span>
+                    </footer>
+                  </div>
+                </button>
+              </div>
+              <div v-if="!workspaceLoading && !workspaces.length" class="empty">
+                <Icon name="workspace" />
+                <h2>为调查建立一个工作区</h2>
+                <p>
+                  {{
+                    groupId
+                      ? "上传视频或截取监控录像，开始整理证据。"
+                      : "先创建小组或在我的消息中接受邀请。"
+                  }}
+                </p>
+              </div>
+              <div
+                v-else-if="!workspaceLoading && !visibleWorkspaces.length"
+                class="empty"
+              >
+                <Icon name="search" />
+                <h2>没有匹配的工作区</h2>
+                <button @click="workspaceSearch = ''">清除搜索</button>
+              </div></template
+            >
+          </template>
+          <Monitors
+            v-else-if="page === 'monitor'"
+            :key="groupId"
+            :group="selectedGroup"
+            @notify="notify"
+          />
+          <People
+            v-else-if="['group', 'messages', 'admin'].includes(page)"
+            :key="page + groupId"
+            :mode="page"
+            :group="selectedGroup"
+            @notify="notify"
+            @groups-changed="refreshGroups"
+          />
+          <Settings
+            v-else
+            :group="selectedGroup"
+            @notify="notify"
+            @logout="logout"
+          /></div
+      ></Transition>
     </div>
   </div>
-  <div v-if="toast" class="toast" role="status">{{ toast }}</div>
+  <Transition name="toast"
+    ><div v-if="toast" class="toast" role="status">{{ toast }}</div></Transition
+  >
+  <Modal v-if="workspaceForm" title="新建工作区" @close="workspaceForm = false"
+    ><form @submit.prevent="saveWorkspace">
+      <label
+        >工作区名称<input
+          v-model="workspaceName"
+          required
+          maxlength="128"
+          placeholder="例如：店内事件核查" /></label
+      ><button class="primary" :disabled="workspaceSaving">
+        {{ workspaceSaving ? "正在创建…" : "创建工作区" }}
+      </button>
+    </form></Modal
+  >
 </template>

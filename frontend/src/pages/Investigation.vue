@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
-import { api } from "../lib/api";
+import { api, mediaUrl } from "../lib/api";
 import {
   duration,
   statusLabel,
@@ -31,7 +31,21 @@ const conversations = ref([]),
   newTitle = ref(""),
   menu = ref(""),
   clock = ref(Date.now());
-const historyPanel = ref(null);
+const historyPanel = ref(null),
+  questionInput = ref(null),
+  conversationSearch = ref(""),
+  listLoading = ref(true),
+  opening = ref(false),
+  listExpanded = ref(false),
+  following = ref(true),
+  hasUpdates = ref(false);
+const visibleConversations = computed(() =>
+  conversations.value.filter((c) =>
+    (c.title || "")
+      .toLowerCase()
+      .includes(conversationSearch.value.trim().toLowerCase()),
+  ),
+);
 const running = computed(() =>
     messages.value.some((m) => m.status === "processing"),
   ),
@@ -42,14 +56,24 @@ const running = computed(() =>
   );
 let pollTimer,
   clockTimer,
+  historyResizeObserver,
   loading = false,
   generation = 0,
   alive = true;
+watch(historyPanel, (panel) => {
+  historyResizeObserver?.disconnect();
+  if (!panel) return;
+  historyResizeObserver = new ResizeObserver(() => {
+    if (following.value) panel.scrollTop = panel.scrollHeight;
+  });
+  historyResizeObserver.observe(panel);
+});
 async function list() {
   const rows = await api(
     `/workspaces/${props.workspace.id}/agent/conversations`,
   );
   if (alive) conversations.value = rows;
+  listLoading.value = false;
 }
 async function loadConfigs() {
   try {
@@ -63,14 +87,49 @@ async function loadConfigs() {
   }
 }
 async function open(conversation) {
+  listExpanded.value = false;
   const run = ++generation;
   current.value = conversation;
   creating.value = false;
   messages.value = [];
   question.value = "";
   error.value = "";
-  await read(run);
+  opening.value = true;
+  following.value = true;
+  hasUpdates.value = false;
+  try {
+    await read(run);
+  } finally {
+    if (run === generation) opening.value = false;
+  }
 }
+function updateScroll() {
+  const panel = historyPanel.value;
+  following.value =
+    !panel || panel.scrollHeight - panel.scrollTop - panel.clientHeight < 70;
+  if (following.value) hasUpdates.value = false;
+}
+async function jumpLatest() {
+  await nextTick();
+  const panel = historyPanel.value;
+  panel?.scrollTo({
+    top: panel.scrollHeight,
+    behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "auto"
+      : "smooth",
+  });
+  hasUpdates.value = false;
+}
+const signature = (rows) =>
+  JSON.stringify(
+    rows.map((m) => [
+      m.id,
+      m.status,
+      m.answer?.length,
+      m.tool_calls?.length,
+      m.process_entries?.length,
+    ]),
+  );
 async function read(run = generation) {
   if (!current.value) return;
   const id = current.value.id;
@@ -83,23 +142,30 @@ async function read(run = generation) {
         historyPanel.value.scrollTop -
         historyPanel.value.clientHeight <
         70;
+    if (!pinned && signature(messages.value) !== signature(data.messages || []))
+      hasUpdates.value = true;
     current.value = data.conversation;
     messages.value = data.messages || [];
     await nextTick();
     if (pinned && historyPanel.value)
       historyPanel.value.scrollTop = historyPanel.value.scrollHeight;
+    updateScroll();
     error.value = "";
   } catch (e) {
     if (run === generation) error.value = e.message;
   }
 }
 function start() {
+  listExpanded.value = false;
   generation++;
   current.value = null;
   messages.value = [];
   selectedIds.value = [];
   question.value = "";
   creating.value = true;
+  opening.value = false;
+  following.value = true;
+  hasUpdates.value = false;
   error.value = "";
   loadConfigs();
 }
@@ -140,6 +206,23 @@ async function send() {
     busy.value = false;
   }
 }
+function composerKey(event) {
+  if (
+    event.key === "Enter" &&
+    (event.ctrlKey || event.metaKey) &&
+    !event.isComposing &&
+    event.keyCode !== 229
+  ) {
+    event.preventDefault();
+    send();
+  }
+}
+watch(question, async () => {
+  await nextTick();
+  if (!questionInput.value) return;
+  questionInput.value.style.height = "auto";
+  questionInput.value.style.height = `${Math.min(questionInput.value.scrollHeight, 130)}px`;
+});
 async function stop(task) {
   if (!confirm("停止当前这一轮调查？已保存记录会保留。")) return;
   try {
@@ -238,6 +321,7 @@ async function poll() {
 }
 onMounted(async () => {
   await loadConfigs();
+  if (!alive) return;
   try {
     await list();
     if (props.jumpConversation)
@@ -248,7 +332,9 @@ onMounted(async () => {
       );
   } catch (e) {
     error.value = e.message;
+    listLoading.value = false;
   }
+  if (!alive) return;
   pollTimer = setInterval(poll, 2500);
   clockTimer = setInterval(() => (clock.value = Date.now()), 1000);
 });
@@ -263,39 +349,81 @@ onUnmounted(() => {
   generation++;
   clearInterval(pollTimer);
   clearInterval(clockTimer);
+  historyResizeObserver?.disconnect();
 });
 </script>
 <template>
   <div class="conversation-layout">
-    <aside class="conversation-list">
-      <button class="primary" @click="start">
-        <Icon name="plus" />新建调查
-      </button>
-      <article
-        v-for="c in conversations"
-        :key="c.id"
-        :class="['conversation-link', { active: current?.id === c.id }]"
-      >
-        <button @click="open(c)">{{ c.title }}</button>
-        <p>{{ c.turn_count }} 轮 · {{ statusLabel(c.latest_status) }}</p>
-        <details v-if="c.can_manage">
-          <summary aria-label="会话操作">⋯ 更多</summary>
+    <aside
+      class="conversation-list"
+      :class="{ 'list-expanded': listExpanded }"
+      @keydown.esc="listExpanded = false"
+    >
+      <div class="conversation-list-head">
+        <button class="primary" @click="start">
+          <Icon name="plus" />新建调查
+        </button>
+        <button
+          class="mobile-conversations-toggle"
+          type="button"
+          :aria-expanded="listExpanded"
+          aria-label="选择调查"
+          @click="listExpanded = !listExpanded"
+        >
+          调查记录 · {{ conversations.length }}<Icon name="down" />
+        </button>
+        <label class="search-field"
+          ><Icon name="search" /><input
+            v-model="conversationSearch"
+            type="search"
+            aria-label="搜索调查"
+            placeholder="查找调查…"
+        /></label>
+        <div class="list-caption">
+          调查记录<span>{{ conversations.length }}</span>
+        </div>
+      </div>
+      <div class="conversation-items">
+        <p v-if="listLoading" class="muted loading-label" role="status">
+          正在加载调查…
+        </p>
+        <article
+          v-for="c in visibleConversations"
+          :key="c.id"
+          :class="['conversation-link', { active: current?.id === c.id }]"
+        >
           <button
-            @click="
-              rename = c;
-              newTitle = c.title;
-            "
+            :aria-current="current?.id === c.id ? 'true' : undefined"
+            @click="open(c)"
           >
-            修改标题</button
-          ><button
-            class="danger"
-            :disabled="c.latest_status === 'processing'"
-            @click="remove(c)"
-          >
-            删除记录
+            {{ c.title }}
           </button>
-        </details>
-      </article>
+          <p>{{ c.turn_count }} 轮 · {{ statusLabel(c.latest_status) }}</p>
+          <details v-if="c.can_manage">
+            <summary aria-label="会话操作">⋯ 更多</summary>
+            <button
+              @click="
+                rename = c;
+                newTitle = c.title;
+              "
+            >
+              修改标题</button
+            ><button
+              class="danger"
+              :disabled="c.latest_status === 'processing'"
+              @click="remove(c)"
+            >
+              删除记录
+            </button>
+          </details>
+        </article>
+        <p
+          v-if="!listLoading && !visibleConversations.length"
+          class="muted loading-label"
+        >
+          {{ conversationSearch ? "没有匹配的调查" : "暂无调查记录" }}
+        </p>
+      </div>
     </aside>
     <main class="conversation-body">
       <p v-if="error" class="error" role="alert">
@@ -308,7 +436,7 @@ onUnmounted(() => {
           </h2>
           <button v-if="current" @click="start">+ 新建</button>
         </header>
-        <div v-if="creating" class="panel">
+        <div v-if="creating" class="panel investigation-selection">
           <h3>选择调查片段</h3>
           <div class="selection-list">
             <label v-for="s in segments" :key="s.id"
@@ -318,8 +446,15 @@ onUnmounted(() => {
                 type="checkbox"
                 :disabled="['processing', 'pending'].includes(s.status)"
               /><span
-                >{{ s.remark || s.video_name }} · {{ duration(s.duration) }}
-                <small>{{ statusLabel(s.status) }}</small></span
+                ><img
+                  v-if="s.thumbnail_url"
+                  :src="mediaUrl(s.thumbnail_url)"
+                  alt=""
+                  loading="lazy"
+                /><span
+                  >{{ s.remark || s.video_name }} · {{ duration(s.duration) }}
+                  <small>{{ statusLabel(s.status) }}</small></span
+                ></span
               ></label
             >
           </div>
@@ -336,135 +471,163 @@ onUnmounted(() => {
             {{ duration(s.duration) }}
           </button>
         </details>
-        <div
-          v-if="messages.length"
-          ref="historyPanel"
-          class="conversation-history"
-          aria-label="调查记录"
-        >
-          <article v-for="m in messages" :key="m.id" class="turn">
-            <div class="row">
-              <small class="muted"
-                >第 {{ m.turn_index }} 轮 · {{ m.creator_id }}</small
-              ><span :class="['badge', m.status]">{{
-                statusLabel(m.status)
-              }}</span>
-            </div>
-            <div class="turn-question">
-              <small class="muted">{{ m.model_config_label }}</small>
-              <p>{{ m.question }}</p>
-            </div>
-            <div class="agent-heading">
-              <Icon name="agent" />调查 Agent
-              <small>用时 {{ duration(elapsed(m)) }}</small
-              ><button
-                v-if="m.status === 'processing'"
-                class="danger"
-                @click="stop(m)"
-              >
-                停止本轮
-              </button>
-            </div>
-            <details :open="m.status === 'processing'" class="process">
-              <summary>
-                <Icon name="chevron" />{{
-                  m.status === "processing" ? "调查过程" : "查看调查过程"
-                }}
-                · {{ m.tool_calls?.length || 0 }} 次工具调用
-              </summary>
-              <template v-for="(entry, i) in entries(m)" :key="i"
-                ><p v-if="entry.kind === 'commentary'" class="process-note">
-                  {{ entry.text }}
-                </p>
-                <details
-                  v-else-if="m.tool_calls?.[entry.tool_index]"
-                  class="tool-row"
+        <div v-if="!creating" class="history-area">
+          <div v-if="opening" class="answer-loading" role="status">
+            <span class="loading-dot" />正在加载调查记录…
+          </div>
+          <div
+            v-if="messages.length"
+            ref="historyPanel"
+            class="conversation-history"
+            aria-label="调查记录"
+            tabindex="0"
+            @scroll="updateScroll"
+          >
+            <article v-for="m in messages" :key="m.id" class="turn">
+              <div class="row">
+                <small class="muted"
+                  >第 {{ m.turn_index }} 轮 · {{ m.creator_id }}</small
+                ><span :class="['badge', m.status]">{{
+                  statusLabel(m.status)
+                }}</span>
+              </div>
+              <div class="turn-question">
+                <small class="muted">{{ m.model_config_label }}</small>
+                <p>{{ m.question }}</p>
+              </div>
+              <div class="agent-heading">
+                <Icon name="agent" />调查 Agent
+                <small>用时 {{ duration(elapsed(m)) }}</small
+                ><button
+                  v-if="m.status === 'processing'"
+                  class="danger"
+                  @click="stop(m)"
                 >
-                  <summary>
-                    <Icon
-                      :name="
-                        m.tool_calls[entry.tool_index].status === 'running'
-                          ? 'refresh'
-                          : ['failed', 'error'].includes(
-                                m.tool_calls[entry.tool_index].status,
-                              )
-                            ? 'close'
-                            : 'check'
-                      "
-                    />{{ toolLabel(m.tool_calls[entry.tool_index].name)
-                    }}<span class="muted">{{
-                      m.tool_calls[entry.tool_index].status === "running"
-                        ? "正在执行"
-                        : ""
-                    }}</span
-                    ><Icon name="chevron" />
-                  </summary>
-                  <div class="tool-fields">
-                    <dl>
-                      <template
-                        v-for="(field, j) in readableFields(
-                          m.tool_calls[entry.tool_index].params || {},
-                        )"
-                        :key="j"
-                        ><dt>{{ field.label }}</dt>
-                        <dd>{{ field.value }}</dd></template
-                      >
-                    </dl>
-                    <p>{{ m.tool_calls[entry.tool_index].summary }}</p>
-                    <button
-                      v-for="(point, j) in m.tool_calls[entry.tool_index]
-                        .evidence || []"
-                      :key="j"
-                      @click="toolEvidence(point)"
+                  停止本轮
+                </button>
+              </div>
+              <details :open="m.status === 'processing'" class="process">
+                <summary>
+                  <Icon name="chevron" />{{
+                    m.status === "processing" ? "调查过程" : "查看调查过程"
+                  }}
+                  · {{ m.tool_calls?.length || 0 }} 次工具调用
+                </summary>
+                <TransitionGroup name="step" tag="div" class="process-entries"
+                  ><template
+                    v-for="(entry, i) in entries(m)"
+                    :key="entry.id || `${i}-${entry.kind}`"
+                    ><p v-if="entry.kind === 'commentary'" class="process-note">
+                      {{ entry.text }}
+                    </p>
+                    <details
+                      v-else-if="m.tool_calls?.[entry.tool_index]"
+                      class="tool-row"
                     >
-                      {{ point.label || "核对原画面" }} ·
-                      {{
-                        duration(
-                          seconds(
-                            point.timestamp_sec ??
-                              point.time ??
-                              point.timestamp ??
-                              point.time_sec ??
-                              0,
-                          ),
-                        )
-                      }}
-                    </button>
-                  </div>
-                </details></template
-              >
-              <p v-if="!entries(m).length" class="muted">
-                {{
-                  m.status === "processing"
-                    ? "正在准备视频与工具…"
-                    : "没有工具调用记录"
-                }}
+                      <summary>
+                        <Icon
+                          :class="{
+                            spinning:
+                              m.tool_calls[entry.tool_index].status ===
+                              'running',
+                          }"
+                          :name="
+                            m.tool_calls[entry.tool_index].status === 'running'
+                              ? 'refresh'
+                              : ['failed', 'error'].includes(
+                                    m.tool_calls[entry.tool_index].status,
+                                  )
+                                ? 'close'
+                                : 'check'
+                          "
+                        />{{ toolLabel(m.tool_calls[entry.tool_index].name)
+                        }}<span class="muted">{{
+                          m.tool_calls[entry.tool_index].status === "running"
+                            ? "正在执行"
+                            : ""
+                        }}</span
+                        ><Icon name="chevron" />
+                      </summary>
+                      <div class="tool-fields">
+                        <dl>
+                          <template
+                            v-for="(field, j) in readableFields(
+                              m.tool_calls[entry.tool_index].params || {},
+                            )"
+                            :key="j"
+                            ><dt>{{ field.label }}</dt>
+                            <dd>{{ field.value }}</dd></template
+                          >
+                        </dl>
+                        <p>{{ m.tool_calls[entry.tool_index].summary }}</p>
+                        <button
+                          v-for="(point, j) in m.tool_calls[entry.tool_index]
+                            .evidence || []"
+                          :key="j"
+                          @click="toolEvidence(point)"
+                        >
+                          {{ point.label || "核对原画面" }} ·
+                          {{
+                            duration(
+                              seconds(
+                                point.timestamp_sec ??
+                                  point.time ??
+                                  point.timestamp ??
+                                  point.time_sec ??
+                                  0,
+                              ),
+                            )
+                          }}
+                        </button>
+                      </div>
+                    </details></template
+                  ></TransitionGroup
+                >
+                <p v-if="!entries(m).length" class="muted">
+                  {{
+                    m.status === "processing"
+                      ? "正在准备视频与工具…"
+                      : "没有工具调用记录"
+                  }}
+                </p>
+              </details>
+              <Answer
+                v-if="m.status === 'completed'"
+                :text="m.answer"
+                @evidence="evidence"
+              />
+              <p v-else-if="m.status === 'failed'" class="error">
+                {{ m.answer || "调查失败，请检查模型配置并重试" }}
               </p>
-            </details>
-            <Answer
-              v-if="m.status === 'completed'"
-              :text="m.answer"
-              @evidence="evidence"
-            />
-            <p v-else-if="m.status === 'failed'" class="error">
-              {{ m.answer || "调查失败，请检查模型配置并重试" }}
-            </p>
-            <button v-if="m.status === 'completed'" @click="share(m)">
-              分享结论</button
-            ><button
-              v-if="m.status === 'failed' && !running"
-              @click="
-                question = m.question;
-                send();
-              "
-            >
-              重新尝试这一问
-            </button>
-          </article>
+              <button v-if="m.status === 'completed'" @click="share(m)">
+                分享结论</button
+              ><button
+                v-if="m.status === 'failed' && !running"
+                @click="
+                  question = m.question;
+                  send();
+                "
+              >
+                重新尝试这一问
+              </button>
+            </article>
+          </div>
+          <button
+            v-if="!following && messages.length"
+            class="jump-latest"
+            type="button"
+            @click="jumpLatest"
+          >
+            <Icon name="down" />{{
+              hasUpdates ? "有新进展 · 查看最新" : "回到最新"
+            }}
+          </button>
         </div>
         <form class="composer" @submit.prevent="send">
           <textarea
             v-model="question"
+            ref="questionInput"
+            @keydown="composerKey"
             :disabled="running"
             maxlength="4000"
             :placeholder="
@@ -497,6 +660,18 @@ onUnmounted(() => {
                 busy ? "正在提交…" : current ? "发送追问" : "开始调查"
               }}
             </button>
+          </div>
+          <div class="composer-caption">
+            <span>{{
+              running
+                ? "调查进行中，完成后可继续追问"
+                : current
+                  ? "沿用当前引用片段与调查上下文"
+                  : "选定片段后，描述你要核查的问题"
+            }}</span
+            ><span class="shortcut-hint"
+              ><kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>Enter</kbd> 发送</span
+            >
           </div>
         </form></template
       >

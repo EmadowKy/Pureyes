@@ -37,7 +37,8 @@ async function setup(page, avatar = "") {
       turn_index: 1,
       question: "车辆去了哪里？",
       answer:
-        '## 关键证据\n车辆经过门口。[video:"2", time:"00:04"]\n<script>window.xss=true</script>\nFRAME_OBSERVATION internal',
+        '## 关键证据\n车辆经过门口。[video:"2", time:"00:04"]\n<script>window.xss=true</script>\nFRAME_OBSERVATION internal' +
+        (state.answerTail || ""),
       status: state.progress ? "processing" : "completed",
       created_at: new Date().toISOString(),
       elapsed_seconds: 24,
@@ -537,15 +538,229 @@ test("mobile layout keeps key actions accessible without horizontal overflow", a
     ),
   ).toBe(true);
   await page.getByRole("button", { name: "调查问答", exact: true }).click();
+  await page.getByRole("button", { name: "选择调查", exact: true }).click();
   await page.getByRole("button", { name: "车辆去向核查", exact: true }).click();
   await expect(page.getByRole("heading", { name: "关键证据" })).toBeVisible();
+  const modelBounds = await page.getByLabel("本轮模型配置").boundingBox();
+  const sendBounds = await page
+    .getByRole("button", { name: "发送追问", exact: true })
+    .boundingBox();
+  expect(Math.abs(modelBounds.y - sendBounds.y)).toBeLessThan(5);
+  const inputBounds = await page.locator(".composer").boundingBox();
+  expect(inputBounds.y + inputBounds.height).toBeLessThanOrEqual(844);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
+  await page.getByRole("button", { name: "打开导航", exact: true }).click();
   await page.getByRole("button", { name: "账号与模型", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "退出登录", exact: true }).last(),
   ).toBeVisible();
+});
+
+test("workspace creation uses a focused dialog and restores its trigger", async ({
+  page,
+}) => {
+  const state = await setup(page);
+  const trigger = page.getByRole("button", { name: "新建工作区", exact: true });
+  await trigger.click();
+  await expect(page.getByLabel("工作区名称", { exact: true })).toBeFocused();
+  await page.getByLabel("工作区名称", { exact: true }).fill("仓库事件调查");
+  await page.getByRole("button", { name: "创建工作区", exact: true }).click();
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  expect(
+    state.requests.some(
+      (request) =>
+        request.path === "/api/workspaces/1" &&
+        request.method === "POST" &&
+        JSON.parse(request.body).name === "仓库事件调查",
+    ),
+  ).toBe(true);
+  await expect(trigger).toBeFocused();
+});
+
+test("library search, status filtering and compact rows preserve clip actions", async ({
+  page,
+}) => {
+  await setup(page);
+  await page.getByLabel("搜索工作区").fill("不匹配");
+  await expect(
+    page.getByRole("heading", { name: "没有匹配的工作区" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "清除搜索", exact: true }).click();
+  await workspace(page);
+  await page.getByLabel("搜索片段").fill("线索 2");
+  await expect(page.locator(".clip-library .clip-card")).toHaveCount(1);
+  await page.getByLabel("片段状态").selectOption("processing");
+  await expect(
+    page.getByRole("heading", { name: "没有匹配的片段" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "清除筛选" }).click();
+  await page.getByRole("button", { name: "列表视图", exact: true }).click();
+  await expect(page.locator(".clip-library")).toHaveClass(/list-style/);
+  await expect(page.locator(".clip-library .clip-card")).toHaveCount(2);
+  await page
+    .getByRole("button", { name: "查看片段", exact: true })
+    .first()
+    .click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).not.toBeVisible();
+  expect(
+    await page.evaluate(() => localStorage.getItem("pureyes.clip-view")),
+  ).toBe("list");
+});
+
+test("navigation rail persists and mobile drawer traps focus without occupying the canvas", async ({
+  page,
+}) => {
+  await setup(page);
+  await page.getByRole("button", { name: "收起导航", exact: true }).click();
+  await expect(page.locator(".app-shell")).toHaveClass(/compact-nav/);
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "调查工作区", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".app-shell")).toHaveClass(/compact-nav/);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator(".sidebar")).not.toBeVisible();
+  await page.getByRole("button", { name: "打开导航", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "主导航" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "关闭导航", exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(
+    page.getByRole("button", { name: "退出登录", exact: true }),
+  ).toBeFocused();
+  expect(await page.evaluate(() => document.body.style.overflow)).toBe(
+    "hidden",
+  );
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("button", { name: "打开导航", exact: true }),
+  ).toBeFocused();
+  expect(await page.evaluate(() => document.body.style.overflow)).not.toBe(
+    "hidden",
+  );
+  await page.getByRole("button", { name: "打开导航", exact: true }).click();
+  await page.getByRole("button", { name: "小组成员", exact: true }).click();
+  await expect(page.locator(".sidebar")).not.toBeVisible();
+  await expect(page.getByLabel("搜索用户")).toBeVisible();
+});
+
+test("nested evidence dialogs close only the top layer and retain scroll locking", async ({
+  page,
+}) => {
+  await setup(page);
+  await workspace(page);
+  await page.getByRole("button", { name: "人脸", exact: true }).click();
+  await page
+    .getByRole("button", { name: "查看出现记录", exact: true })
+    .first()
+    .click();
+  await page.getByRole("button", { name: "定位原视频", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(2);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  expect(await page.evaluate(() => document.body.style.overflow)).toBe(
+    "hidden",
+  );
+  await expect(
+    page.getByRole("button", { name: "定位原视频", exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(await page.evaluate(() => document.body.style.overflow)).not.toBe(
+    "hidden",
+  );
+});
+
+test("live polling retains review position and exposes new progress without remounting", async ({
+  page,
+}) => {
+  const state = await setup(page);
+  state.answerTail =
+    "\n\n" +
+    "当前画面显示车辆经过门口，应结合其他镜头核实后续路线。\n\n".repeat(50);
+  await workspace(page);
+  await page.getByRole("button", { name: "调查问答", exact: true }).click();
+  await page.getByRole("button", { name: "车辆去向核查", exact: true }).click();
+  const history = page.locator(".conversation-history");
+  await expect(history).toBeVisible();
+  await history.evaluate((element) => {
+    element.scrollTop = 0;
+    element.dispatchEvent(new Event("scroll"));
+    window.reviewNode = element;
+  });
+  await expect(
+    page.getByRole("button", { name: "回到最新", exact: true }),
+  ).toBeVisible();
+  state.answerTail += "\n\n新增核验结果。";
+  await expect(
+    page.getByRole("button", { name: "有新进展 · 查看最新", exact: true }),
+  ).toBeVisible({ timeout: 10000 });
+  expect(await history.evaluate((element) => element.scrollTop)).toBe(0);
+  expect(
+    await history.evaluate((element) => element === window.reviewNode),
+  ).toBe(true);
+  const composer = await page.locator(".composer").boundingBox();
+  const viewport = page.viewportSize();
+  expect(composer.y + composer.height).toBeLessThanOrEqual(viewport.height);
+  await page
+    .getByRole("button", { name: "有新进展 · 查看最新", exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      history.evaluate(
+        (element) =>
+          element.scrollHeight - element.scrollTop - element.clientHeight,
+      ),
+    )
+    .toBeLessThan(70);
+  await page.setViewportSize({ width: 1280, height: 640 });
+  await expect
+    .poll(() =>
+      history.evaluate(
+        (element) =>
+          element.scrollHeight - element.scrollTop - element.clientHeight,
+      ),
+    )
+    .toBeLessThan(70);
+  await history.evaluate((element) => {
+    element.scrollTop = 0;
+    element.dispatchEvent(new Event("scroll"));
+  });
+  await page.setViewportSize({ width: 1280, height: 780 });
+  expect(await history.evaluate((element) => element.scrollTop)).toBe(0);
+});
+
+test("reduced motion and IME-safe keyboard submission stay usable", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const state = await setup(page);
+  await workspace(page);
+  await page.getByRole("button", { name: "调查问答", exact: true }).click();
+  await page
+    .getByRole("button", { name: "新建调查", exact: true })
+    .first()
+    .click();
+  await page.locator(".selection-list input").first().check();
+  await page.getByLabel("调查问题").fill("核查门口的车辆");
+  await page.getByLabel("调查问题").dispatchEvent("keydown", {
+    key: "Enter",
+    ctrlKey: true,
+    isComposing: true,
+  });
+  expect(state.submitted).toHaveLength(0);
+  await page.getByLabel("调查问题").press("Control+Enter");
+  await expect.poll(() => state.submitted.length).toBe(1);
+  expect(
+    await page
+      .locator(".page-content")
+      .evaluate((element) => getComputedStyle(element).transitionDuration),
+  ).toBe("0s");
 });

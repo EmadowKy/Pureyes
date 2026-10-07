@@ -19,6 +19,10 @@ const tab = ref(props.jumpConversation ? "agent" : "clips"),
   segments = ref([]),
   faces = ref([]),
   error = ref(""),
+  initialLoading = ref(true),
+  clipSearch = ref(""),
+  clipFilter = ref("all"),
+  clipView = ref(localStorage.getItem("pureyes.clip-view") || "grid"),
   filter = ref(""),
   faceBackend = ref(null),
   detail = ref(null),
@@ -53,6 +57,22 @@ const source = computed(() =>
         (!range.end || r.start_time_offset <= seconds(range.end)),
     ),
   );
+const visibleSegments = computed(() =>
+  segments.value.filter((s) => {
+    const query = clipSearch.value.trim().toLowerCase();
+    const matches = `${s.remark || ""} ${s.video_name || ""}`
+      .toLowerCase()
+      .includes(query);
+    return (
+      matches &&
+      (clipFilter.value === "all" ||
+        (clipFilter.value === "processing"
+          ? ["pending", "processing"].includes(s.status)
+          : s.status === clipFilter.value))
+    );
+  }),
+);
+watch(clipView, (value) => localStorage.setItem("pureyes.clip-view", value));
 let timer,
   loading = false,
   alive = true,
@@ -91,6 +111,7 @@ async function load() {
     if (alive) error.value = e.message;
   } finally {
     loading = false;
+    initialLoading.value = false;
   }
 }
 async function loadFaces() {
@@ -263,7 +284,7 @@ onMounted(async () => {
   try {
     faceBackend.value = await api("/workspaces/face-backend");
   } catch {}
-  timer = setInterval(load, 5000);
+  if (alive) timer = setInterval(load, 5000);
 });
 onUnmounted(() => {
   alive = false;
@@ -272,124 +293,228 @@ onUnmounted(() => {
 });
 </script>
 <template>
-  <header class="page-heading">
-    <div>
-      <button class="icon-button" @click="emit('back')">
-        <Icon name="back" />工作区列表
+  <section class="workspace-page" :class="{ investigating: tab === 'agent' }">
+    <header class="page-heading">
+      <div>
+        <button class="icon-button" @click="emit('back')">
+          <Icon name="back" />工作区列表
+        </button>
+        <h1>{{ workspace.name }}</h1>
+        <p>视频片段、人脸线索与团队调查</p>
+      </div>
+      <button v-if="tab === 'clips'" class="primary" @click="create">
+        <Icon name="plus" />截取新片段
       </button>
-      <h1>{{ workspace.name }}</h1>
-      <p>视频片段、人脸线索与团队调查</p>
+    </header>
+    <div class="tabs">
+      <button
+        :class="{ active: tab === 'clips' }"
+        :aria-pressed="tab === 'clips'"
+        aria-label="片段"
+        @click="tab = 'clips'"
+      >
+        <Icon name="clip" />片段<span class="tab-count">{{
+          segments.length
+        }}</span></button
+      ><button
+        :class="{ active: tab === 'faces' }"
+        :aria-pressed="tab === 'faces'"
+        @click="tab = 'faces'"
+      >
+        <Icon name="face" />人脸</button
+      ><button
+        :class="{ active: tab === 'agent' }"
+        :aria-pressed="tab === 'agent'"
+        @click="tab = 'agent'"
+      >
+        <Icon name="agent" />调查问答
+      </button>
     </div>
-    <button v-if="tab === 'clips'" class="primary" @click="create">
-      <Icon name="plus" />截取新片段
-    </button>
-  </header>
-  <div class="tabs">
-    <button :class="{ active: tab === 'clips' }" @click="tab = 'clips'">
-      <Icon name="clip" />片段</button
-    ><button :class="{ active: tab === 'faces' }" @click="tab = 'faces'">
-      <Icon name="face" />人脸</button
-    ><button :class="{ active: tab === 'agent' }" @click="tab = 'agent'">
-      <Icon name="agent" />调查问答
-    </button>
-  </div>
-  <p v-if="error" class="error" role="alert">
-    {{ error }} <button @click="load">重新加载</button>
-  </p>
-  <template v-if="tab === 'clips'"
-    ><div class="card-grid">
-      <article v-for="s in segments" :key="s.id" class="clip-card">
-        <button
-          class="clip-preview"
-          style="border: 0; padding: 0; width: 100%"
-          @click="detail = s"
-        >
-          <img
-            :src="mediaUrl(s.thumbnail_url)"
-            :alt="s.remark || s.video_name"
-            loading="lazy"
-          />
-          <span class="preview-play"><Icon name="play" /></span>
-          <span class="preview-duration">{{ duration(s.duration) }}</span>
-        </button>
-        <div class="card-body">
-          <h3 :title="s.remark || s.video_name">
-            {{ s.remark || s.video_name }}
-          </h3>
-          <p>
-            {{ duration(s.duration) }} · {{ s.resolution }} ·
-            {{ s.sample_fps }} FPS
-          </p>
-          <div class="row">
-            <span :class="['badge', s.status]">{{ clipStatus(s.status) }}</span
-            ><button @click="detail = s">查看片段</button>
-          </div>
-          <template v-if="['pending', 'processing'].includes(s.status)"
-            ><progress :value="s.progress" max="100" />
-            <p>
-              {{ s.progress }}% ·
-              {{
-                rates[s.id] ? "约 " + rates[s.id] + "% / 分钟" : "等待新进度"
-              }}
-            </p></template
-          >
-          <p v-if="s.error_msg" class="error">{{ s.error_msg }}</p>
-        </div>
-      </article>
-    </div>
-    <div v-if="!segments.length" class="empty">
-      <Icon name="clip" />
-      <h2>添加第一段调查录像</h2>
-      <p>上传本地视频或从同组监控中截取片段。</p>
-      <button @click="create">截取新片段</button>
-    </div></template
-  >
-  <template v-else-if="tab === 'faces'"
-    ><div class="toolbar">
-      <h2>人脸线索</h2>
-      <select v-model="filter" aria-label="按片段筛选" style="max-width: 300px">
-        <option value="">全部片段</option>
-        <option v-for="s in segments" :key="s.id" :value="s.id">
-          {{ s.remark || s.video_name }}
-        </option></select
-      ><button @click="loadFaces"><Icon name="refresh" />刷新</button>
-    </div>
-    <p v-if="faces.some((f) => f.needs_classification)" class="privacy-note">
-      部分抓拍等待鸿蒙手机归类，请在鸿蒙端使用本机人脸能力处理；网页可查看抓拍与管理已有分组。
+    <p v-if="error" class="error" role="alert">
+      {{ error }} <button @click="load">重新加载</button>
     </p>
-    <div class="card-grid">
-      <article v-for="f in faces" :key="f.id" class="clip-card">
-        <button style="padding: 0; border: 0; width: 100%" @click="openFace(f)">
-          <img
-            class="face-cover"
-            :src="mediaUrl(f.avatar_url)"
-            :alt="f.name"
-            loading="lazy"
-          />
-        </button>
-        <div class="card-body">
-          <h3>{{ f.name }}</h3>
-          <p>
-            {{ f.record_count }} 条出现记录
-            <span v-if="f.is_legacy" class="badge">旧版线索 · 待重建</span>
+    <Transition name="view" mode="out-in"
+      ><div
+        :key="tab"
+        class="workspace-view"
+        :class="{ 'agent-view': tab === 'agent' }"
+      >
+        <template v-if="tab === 'clips'"
+          ><div class="library-toolbar">
+            <label class="search-field"
+              ><Icon name="search" /><input
+                v-model="clipSearch"
+                type="search"
+                placeholder="查找名称或备注…"
+                aria-label="搜索片段"
+            /></label>
+            <select v-model="clipFilter" aria-label="片段状态">
+              <option value="all">全部状态</option>
+              <option value="processing">正在预处理</option>
+              <option value="completed">预处理完成</option>
+              <option value="failed">处理失败</option>
+            </select>
+            <span class="library-result muted"
+              >{{ visibleSegments.length }} 个片段</span
+            >
+            <div class="view-switch" role="group" aria-label="片段视图">
+              <button
+                aria-label="卡片视图"
+                :aria-pressed="clipView !== 'list'"
+                @click="clipView = 'grid'"
+              >
+                <Icon name="grid" /></button
+              ><button
+                aria-label="列表视图"
+                :aria-pressed="clipView === 'list'"
+                @click="clipView = 'list'"
+              >
+                <Icon name="list" />
+              </button>
+            </div>
+          </div>
+          <div
+            v-if="initialLoading"
+            class="card-grid skeleton-grid"
+            aria-label="正在加载片段"
+            aria-busy="true"
+          >
+            <div v-for="n in 4" :key="n" class="skeleton-card">
+              <div />
+              <i /><i />
+            </div>
+          </div>
+          <div
+            v-else
+            class="card-grid clip-library"
+            :class="{ 'list-style': clipView === 'list' }"
+          >
+            <article v-for="s in visibleSegments" :key="s.id" class="clip-card">
+              <button
+                class="clip-preview"
+                style="border: 0; padding: 0; width: 100%"
+                @click="detail = s"
+              >
+                <img
+                  :src="mediaUrl(s.thumbnail_url)"
+                  :alt="s.remark || s.video_name"
+                  loading="lazy"
+                />
+                <span class="preview-play"><Icon name="play" /></span>
+                <span class="preview-duration">{{ duration(s.duration) }}</span>
+              </button>
+              <div class="card-body">
+                <h3 :title="s.remark || s.video_name">
+                  {{ s.remark || s.video_name }}
+                </h3>
+                <p>
+                  {{ duration(s.duration) }} · {{ s.resolution }} ·
+                  {{ s.sample_fps }} FPS
+                </p>
+                <div class="row">
+                  <span :class="['badge', s.status]">{{
+                    clipStatus(s.status)
+                  }}</span
+                  ><button @click="detail = s">查看片段</button>
+                </div>
+                <template v-if="['pending', 'processing'].includes(s.status)"
+                  ><progress :value="s.progress" max="100" />
+                  <p>
+                    {{ s.progress }}% ·
+                    {{
+                      rates[s.id]
+                        ? "约 " + rates[s.id] + "% / 分钟"
+                        : "等待新进度"
+                    }}
+                  </p></template
+                >
+                <p v-if="s.error_msg" class="error">{{ s.error_msg }}</p>
+              </div>
+            </article>
+          </div>
+          <div v-if="!initialLoading && !segments.length" class="empty">
+            <Icon name="clip" />
+            <h2>添加第一段调查录像</h2>
+            <p>上传本地视频或从同组监控中截取片段。</p>
+            <button @click="create">截取新片段</button>
+          </div>
+          <div
+            v-else-if="!initialLoading && !visibleSegments.length"
+            class="empty"
+          >
+            <Icon name="search" />
+            <h2>没有匹配的片段</h2>
+            <p>试试其他名称，或查看全部状态。</p>
+            <button
+              @click="
+                clipSearch = '';
+                clipFilter = 'all';
+              "
+            >
+              清除筛选
+            </button>
+          </div></template
+        >
+        <template v-else-if="tab === 'faces'"
+          ><div class="toolbar">
+            <h2>人脸线索</h2>
+            <select
+              v-model="filter"
+              aria-label="按片段筛选"
+              style="max-width: 300px"
+            >
+              <option value="">全部片段</option>
+              <option v-for="s in segments" :key="s.id" :value="s.id">
+                {{ s.remark || s.video_name }}
+              </option></select
+            ><button @click="loadFaces"><Icon name="refresh" />刷新</button>
+          </div>
+          <p
+            v-if="faces.some((f) => f.needs_classification)"
+            class="privacy-note"
+          >
+            部分抓拍等待鸿蒙手机归类，请在鸿蒙端使用本机人脸能力处理；网页可查看抓拍与管理已有分组。
           </p>
-          <button @click="openFace(f)">查看出现记录</button>
-        </div>
-      </article>
-    </div>
-    <div v-if="!faces.length" class="empty">
-      <h2>暂无人脸线索</h2>
-      <p>先对视频片段进行完整预处理。</p>
-    </div></template
-  >
-  <Investigation
-    v-else
-    :workspace="workspace"
-    :segments="segments"
-    :jump-conversation="jumpConversation"
-    @notify="emit('notify', $event)"
-    @play="player = $event"
-  />
+          <div class="card-grid">
+            <article v-for="f in faces" :key="f.id" class="clip-card">
+              <button
+                style="padding: 0; border: 0; width: 100%"
+                @click="openFace(f)"
+              >
+                <img
+                  class="face-cover"
+                  :src="mediaUrl(f.avatar_url)"
+                  :alt="f.name"
+                  loading="lazy"
+                />
+              </button>
+              <div class="card-body">
+                <h3>{{ f.name }}</h3>
+                <p>
+                  {{ f.record_count }} 条出现记录
+                  <span v-if="f.is_legacy" class="badge"
+                    >旧版线索 · 待重建</span
+                  >
+                </p>
+                <button @click="openFace(f)">查看出现记录</button>
+              </div>
+            </article>
+          </div>
+          <div v-if="!faces.length" class="empty">
+            <h2>暂无人脸线索</h2>
+            <p>先对视频片段进行完整预处理。</p>
+          </div></template
+        >
+        <Investigation
+          v-else
+          :workspace="workspace"
+          :segments="segments"
+          :jump-conversation="jumpConversation"
+          @notify="emit('notify', $event)"
+          @play="player = $event"
+        /></div
+    ></Transition>
+  </section>
   <Modal
     v-if="detail"
     :title="detail.remark || detail.video_name"
