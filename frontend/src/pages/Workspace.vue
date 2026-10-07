@@ -59,6 +59,10 @@ let timer,
   uploadController;
 const rateSamples = new Map(),
   rates = ref({});
+const clipStatus = (value) =>
+  ({ processing: "预处理中", pending: "等待预处理", completed: "预处理完成" })[
+    value
+  ] || statusLabel(value);
 async function load() {
   if (loading) return;
   loading = true;
@@ -78,6 +82,8 @@ async function load() {
       rateSamples.set(row.id, { progress: row.progress, at: now });
     }
     segments.value = rows;
+    if (detail.value)
+      detail.value = rows.find((row) => row.id === detail.value.id) || null;
     rates.value = speed;
     error.value = "";
     if (tab.value === "faces") await loadFaces();
@@ -307,7 +313,7 @@ onUnmounted(() => {
             {{ s.sample_fps }} FPS
           </p>
           <div class="row">
-            <span :class="['badge', s.status]">{{ statusLabel(s.status) }}</span
+            <span :class="['badge', s.status]">{{ clipStatus(s.status) }}</span
             ><button @click="detail = s">查看片段</button>
           </div>
           <template v-if="['pending', 'processing'].includes(s.status)"
@@ -384,7 +390,7 @@ onUnmounted(() => {
     ><MediaPlayer :src="detail.media_url" />
     <p class="muted">
       {{ duration(detail.duration) }} · {{ detail.resolution }} ·
-      {{ detail.sample_fps }} FPS · {{ statusLabel(detail.status) }}
+      {{ detail.sample_fps }} FPS · {{ clipStatus(detail.status) }}
     </p>
     <div class="row">
       <button @click="editRemark">编辑备注</button

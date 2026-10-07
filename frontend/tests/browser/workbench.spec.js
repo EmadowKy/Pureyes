@@ -229,6 +229,13 @@ test("workspace, face records, parameters, citations and sanitized answer", asyn
   await page.getByRole("button", { name: "调查问答", exact: true }).click();
   await page.getByRole("button", { name: "车辆去向核查", exact: true }).click();
   await expect(page.getByRole("heading", { name: "关键证据" })).toBeVisible();
+  const historyBounds = await page
+    .locator(".conversation-history")
+    .boundingBox();
+  const composerBounds = await page.locator(".composer").boundingBox();
+  expect(historyBounds.y + historyBounds.height).toBeLessThanOrEqual(
+    composerBounds.y,
+  );
   await expect(page.locator(".answer")).not.toContainText("FRAME_OBSERVATION");
   expect(await page.evaluate(() => window.xss)).toBeUndefined();
   await page.getByText("引用片段 · 2", { exact: true }).click();

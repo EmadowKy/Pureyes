@@ -85,6 +85,7 @@ async function login() {
   } catch (e) {
     error.value = e.message;
   } finally {
+    credentials.password = "";
     busy.value = false;
   }
 }

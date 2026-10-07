@@ -105,7 +105,12 @@ export function mediaUrl(value) {
   if (!value) return "";
   if (/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(value))
     return value;
-  const url = new URL(value, session.server || location.origin);
+  let url;
+  try {
+    url = new URL(value, session.server || location.origin);
+  } catch {
+    return "";
+  }
   if (!["http:", "https:"].includes(url.protocol)) return "";
   if (session.server === "" && url.origin === "http://116.62.178.139")
     return url.pathname + url.search;

@@ -691,6 +691,67 @@ progress {
   grid-template-columns: 230px minmax(0, 1fr);
   gap: 24px;
 }
+.conversation-history {
+  max-height: max(320px, calc(100dvh - 540px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 10px;
+  margin-bottom: 20px;
+  scrollbar-gutter: stable;
+}
+.conversation-body > header > button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.conversation-body > header > h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (min-width: 761px) {
+  .page-content:has(.conversation-layout) {
+    padding-top: 18px;
+    padding-bottom: 18px;
+  }
+  .page-content:has(.conversation-layout) .page-heading {
+    margin-bottom: 12px;
+  }
+  .page-content:has(.conversation-layout) .page-heading > div {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    min-width: 0;
+  }
+  .page-content:has(.conversation-layout) .page-heading p {
+    display: none;
+  }
+  .page-content:has(.conversation-layout) .page-heading h1 {
+    font-size: 24px;
+    margin: 0;
+  }
+  .conversation-history {
+    max-height: max(180px, calc(100dvh - 540px));
+  }
+  .conversation-body > header {
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .conversation-body > header h2 {
+    margin: 0;
+    font-size: 18px;
+  }
+  .conversation-body .evidence-scope {
+    margin-bottom: 12px;
+  }
+  .conversation-list {
+    max-height: calc(100dvh - 240px);
+    overflow: auto;
+  }
+  .conversation-body .composer textarea {
+    min-height: 45px;
+  }
+}
 .conversation-list {
   border-right: 1px solid var(--line);
   padding-right: 20px;
@@ -851,8 +912,7 @@ progress {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 16px;
-  position: sticky;
-  bottom: 16px;
+  position: relative;
   box-shadow: 0 8px 22px #112e4210;
 }
 .composer textarea {
@@ -1011,7 +1071,7 @@ progress {
     flex-wrap: wrap;
   }
   .composer {
-    bottom: 8px;
+    bottom: auto;
   }
 }
 @media (prefers-reduced-motion: no-preference) {

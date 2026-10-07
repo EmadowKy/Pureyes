@@ -39,6 +39,8 @@ npm run test:e2e
 
 浏览器测试默认使用本机 Chrome 的无头模式。构建结果在 `frontend/dist`，依赖和构建结果不纳入版本控制。测试使用本地模拟 API 检查页面与交互；真实服务验收单独运行，不应以模拟测试代替媒体解码和远端调查验收。
 
+真实验收使用环境变量 `PUREYES_TEST_EMP_ID`、`PUREYES_TEST_PASSWORD`。仅检查已有数据可运行 `npm run test:remote -- --grep "real server"`；完整流程还需设置 `PUREYES_TEST_VIDEO` 为一段至少四秒的可播放本地视频，再运行 `npm run test:remote`。完整流程会在 test1 下创建独立验收工作区，上传、截取两个片段并执行预处理和两轮调查，会占用服务器算力和模型调用额度；已有 test 工作区不修改。
+
 ## 部署
 
 将 `frontend/dist` 发布到独立站点，并用反向代理将同域 `/api/` 转发到现有 pureyes-harmony 后端。生产环境使用 HTTPS，同源代理可避免混合内容和跨域问题。部署示例见 [部署说明](docs/web-deployment.md)。

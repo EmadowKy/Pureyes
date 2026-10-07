@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { api } from "../lib/api";
 import {
   duration,
@@ -31,6 +31,7 @@ const conversations = ref([]),
   newTitle = ref(""),
   menu = ref(""),
   clock = ref(Date.now());
+const historyPanel = ref(null);
 const running = computed(() =>
     messages.value.some((m) => m.status === "processing"),
   ),
@@ -76,8 +77,17 @@ async function read(run = generation) {
   try {
     const data = await api(`/workspaces/agent/conversations/${id}/messages`);
     if (!alive || run !== generation || id !== current.value?.id) return;
+    const pinned =
+      !historyPanel.value ||
+      historyPanel.value.scrollHeight -
+        historyPanel.value.scrollTop -
+        historyPanel.value.clientHeight <
+        70;
     current.value = data.conversation;
     messages.value = data.messages || [];
+    await nextTick();
+    if (pinned && historyPanel.value)
+      historyPanel.value.scrollTop = historyPanel.value.scrollHeight;
     error.value = "";
   } catch (e) {
     if (run === generation) error.value = e.message;
@@ -293,7 +303,9 @@ onUnmounted(() => {
       </p>
       <template v-if="creating || current"
         ><header>
-          <h2>{{ current?.title || "开始新的调查" }}</h2>
+          <h2 :title="current?.title">
+            {{ current?.title || "开始新的调查" }}
+          </h2>
           <button v-if="current" @click="start">+ 新建</button>
         </header>
         <div v-if="creating" class="panel">
@@ -324,121 +336,132 @@ onUnmounted(() => {
             {{ duration(s.duration) }}
           </button>
         </details>
-        <article v-for="m in messages" :key="m.id" class="turn">
-          <div class="row">
-            <small class="muted"
-              >第 {{ m.turn_index }} 轮 · {{ m.creator_id }}</small
-            ><span :class="['badge', m.status]">{{
-              statusLabel(m.status)
-            }}</span>
-          </div>
-          <div class="turn-question">
-            <small class="muted">{{ m.model_config_label }}</small>
-            <p>{{ m.question }}</p>
-          </div>
-          <div class="agent-heading">
-            <Icon name="agent" />调查 Agent
-            <small>用时 {{ duration(elapsed(m)) }}</small
-            ><button
-              v-if="m.status === 'processing'"
-              class="danger"
-              @click="stop(m)"
-            >
-              停止本轮
-            </button>
-          </div>
-          <details :open="m.status === 'processing'" class="process">
-            <summary>
-              <Icon name="chevron" />{{
-                m.status === "processing" ? "调查过程" : "查看调查过程"
-              }}
-              · {{ m.tool_calls?.length || 0 }} 次工具调用
-            </summary>
-            <template v-for="(entry, i) in entries(m)" :key="i"
-              ><p v-if="entry.kind === 'commentary'" class="process-note">
-                {{ entry.text }}
-              </p>
-              <details
-                v-else-if="m.tool_calls?.[entry.tool_index]"
-                class="tool-row"
+        <div
+          v-if="messages.length"
+          ref="historyPanel"
+          class="conversation-history"
+          aria-label="调查记录"
+        >
+          <article v-for="m in messages" :key="m.id" class="turn">
+            <div class="row">
+              <small class="muted"
+                >第 {{ m.turn_index }} 轮 · {{ m.creator_id }}</small
+              ><span :class="['badge', m.status]">{{
+                statusLabel(m.status)
+              }}</span>
+            </div>
+            <div class="turn-question">
+              <small class="muted">{{ m.model_config_label }}</small>
+              <p>{{ m.question }}</p>
+            </div>
+            <div class="agent-heading">
+              <Icon name="agent" />调查 Agent
+              <small>用时 {{ duration(elapsed(m)) }}</small
+              ><button
+                v-if="m.status === 'processing'"
+                class="danger"
+                @click="stop(m)"
               >
-                <summary>
-                  <Icon
-                    :name="
-                      m.tool_calls[entry.tool_index].status === 'running'
-                        ? 'refresh'
-                        : 'check'
-                    "
-                  />{{ toolLabel(m.tool_calls[entry.tool_index].name)
-                  }}<span class="muted">{{
-                    m.tool_calls[entry.tool_index].status === "running"
-                      ? "正在执行"
-                      : ""
-                  }}</span
-                  ><Icon name="chevron" />
-                </summary>
-                <div class="tool-fields">
-                  <dl>
-                    <template
-                      v-for="(field, j) in readableFields(
-                        m.tool_calls[entry.tool_index].params || {},
-                      )"
+                停止本轮
+              </button>
+            </div>
+            <details :open="m.status === 'processing'" class="process">
+              <summary>
+                <Icon name="chevron" />{{
+                  m.status === "processing" ? "调查过程" : "查看调查过程"
+                }}
+                · {{ m.tool_calls?.length || 0 }} 次工具调用
+              </summary>
+              <template v-for="(entry, i) in entries(m)" :key="i"
+                ><p v-if="entry.kind === 'commentary'" class="process-note">
+                  {{ entry.text }}
+                </p>
+                <details
+                  v-else-if="m.tool_calls?.[entry.tool_index]"
+                  class="tool-row"
+                >
+                  <summary>
+                    <Icon
+                      :name="
+                        m.tool_calls[entry.tool_index].status === 'running'
+                          ? 'refresh'
+                          : ['failed', 'error'].includes(
+                                m.tool_calls[entry.tool_index].status,
+                              )
+                            ? 'close'
+                            : 'check'
+                      "
+                    />{{ toolLabel(m.tool_calls[entry.tool_index].name)
+                    }}<span class="muted">{{
+                      m.tool_calls[entry.tool_index].status === "running"
+                        ? "正在执行"
+                        : ""
+                    }}</span
+                    ><Icon name="chevron" />
+                  </summary>
+                  <div class="tool-fields">
+                    <dl>
+                      <template
+                        v-for="(field, j) in readableFields(
+                          m.tool_calls[entry.tool_index].params || {},
+                        )"
+                        :key="j"
+                        ><dt>{{ field.label }}</dt>
+                        <dd>{{ field.value }}</dd></template
+                      >
+                    </dl>
+                    <p>{{ m.tool_calls[entry.tool_index].summary }}</p>
+                    <button
+                      v-for="(point, j) in m.tool_calls[entry.tool_index]
+                        .evidence || []"
                       :key="j"
-                      ><dt>{{ field.label }}</dt>
-                      <dd>{{ field.value }}</dd></template
+                      @click="toolEvidence(point)"
                     >
-                  </dl>
-                  <p>{{ m.tool_calls[entry.tool_index].summary }}</p>
-                  <button
-                    v-for="(point, j) in m.tool_calls[entry.tool_index]
-                      .evidence || []"
-                    :key="j"
-                    @click="toolEvidence(point)"
-                  >
-                    {{ point.label || "核对原画面" }} ·
-                    {{
-                      duration(
-                        seconds(
-                          point.timestamp_sec ??
-                            point.time ??
-                            point.timestamp ??
-                            point.time_sec ??
-                            0,
-                        ),
-                      )
-                    }}
-                  </button>
-                </div>
-              </details></template
-            >
-            <p v-if="!entries(m).length" class="muted">
-              {{
-                m.status === "processing"
-                  ? "正在准备视频与工具…"
-                  : "没有工具调用记录"
-              }}
+                      {{ point.label || "核对原画面" }} ·
+                      {{
+                        duration(
+                          seconds(
+                            point.timestamp_sec ??
+                              point.time ??
+                              point.timestamp ??
+                              point.time_sec ??
+                              0,
+                          ),
+                        )
+                      }}
+                    </button>
+                  </div>
+                </details></template
+              >
+              <p v-if="!entries(m).length" class="muted">
+                {{
+                  m.status === "processing"
+                    ? "正在准备视频与工具…"
+                    : "没有工具调用记录"
+                }}
+              </p>
+            </details>
+            <Answer
+              v-if="m.status === 'completed'"
+              :text="m.answer"
+              @evidence="evidence"
+            />
+            <p v-else-if="m.status === 'failed'" class="error">
+              {{ m.answer || "调查失败，请检查模型配置并重试" }}
             </p>
-          </details>
-          <Answer
-            v-if="m.status === 'completed'"
-            :text="m.answer"
-            @evidence="evidence"
-          />
-          <p v-else-if="m.status === 'failed'" class="error">
-            {{ m.answer || "调查失败，请检查模型配置并重试" }}
-          </p>
-          <button v-if="m.status === 'completed'" @click="share(m)">
-            分享结论</button
-          ><button
-            v-if="m.status === 'failed' && !running"
-            @click="
-              question = m.question;
-              send();
-            "
-          >
-            重新尝试这一问
-          </button>
-        </article>
+            <button v-if="m.status === 'completed'" @click="share(m)">
+              分享结论</button
+            ><button
+              v-if="m.status === 'failed' && !running"
+              @click="
+                question = m.question;
+                send();
+              "
+            >
+              重新尝试这一问
+            </button>
+          </article>
+        </div>
         <form class="composer" @submit.prevent="send">
           <textarea
             v-model="question"

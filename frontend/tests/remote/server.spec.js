@@ -70,6 +70,9 @@ test("real server: login, shared clips, actual media decoding, faces, conversati
   await expect(
     page.getByRole("button", { name: "查看画面", exact: true }),
   ).not.toHaveCount(0);
+  const historyResponse = page.waitForResponse((response) =>
+    response.url().includes("/history?"),
+  );
   await page
     .getByRole("button", { name: "查看画面", exact: true })
     .first()
@@ -80,5 +83,28 @@ test("real server: login, shared clips, actual media decoding, faces, conversati
     })
     .toBeGreaterThanOrEqual(2);
   await expect(page.getByLabel("录像时间轴")).toBeVisible();
+  const history = (await (await historyResponse).json()).data;
+  expect(history.available_ranges.length).toBeGreaterThan(0);
+  const range = history.available_ranges[0];
+  const time = new Date(
+    (+new Date(range.start_time) + +new Date(range.end_time)) / 2,
+  );
+  const local = new Date(time.getTime() - time.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 19);
+  await page.getByLabel("定位时间").fill(local);
+  await page.getByLabel("定位时间").blur();
+  await expect(page.getByText("回放", { exact: true })).toBeVisible();
+  await expect
+    .poll(() => page.locator("video").evaluate((v) => v.readyState), {
+      timeout: 60000,
+    })
+    .toBeGreaterThanOrEqual(2);
+  await page.locator("video").evaluate((v) => v.play());
+  await expect
+    .poll(() => page.locator("video").evaluate((v) => v.currentTime), {
+      timeout: 15000,
+    })
+    .toBeGreaterThan(0.5);
   expect(errors).toEqual([]);
 });
