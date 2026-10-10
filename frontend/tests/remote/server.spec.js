@@ -9,7 +9,14 @@ test("real server: login, shared clips, actual media decoding, faces, conversati
   );
   expect(avatarResponse.ok()).toBe(true);
   expect(avatarResponse.headers()["content-type"]).toContain("image/svg+xml");
-  await page.goto("/");
+  await page.goto("./");
+  await expect
+    .poll(() =>
+      page
+        .locator(".brand img")
+        .evaluate((image) => image.complete && image.naturalWidth > 0),
+    )
+    .toBe(true);
   expect(
     await page.evaluate(
       () =>

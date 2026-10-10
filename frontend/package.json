@@ -9,7 +9,8 @@
     "preview": "vite preview --configLoader native",
     "test": "node --test tests/format.test.js",
     "test:e2e": "playwright test",
-    "test:remote": "playwright test --config=playwright.remote.config.js"
+    "test:remote": "playwright test --config=playwright.remote.config.js",
+    "test:deployment": "playwright test --config=playwright.deployment.config.js"
   },
   "dependencies": {
     "dompurify": "^3.4.16",

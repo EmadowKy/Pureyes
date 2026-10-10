@@ -25,6 +25,7 @@ import People from "./pages/People.vue";
 import Settings from "./pages/Settings.vue";
 import Modal from "./components/Modal.vue";
 import { lockPageScroll, trapFocus } from "./lib/overlay";
+const brandLogo = `${import.meta.env.BASE_URL}logo.png`;
 const page = ref("workspace"),
   groups = ref([]),
   groupId = ref(""),
@@ -321,7 +322,7 @@ onUnmounted(() => {
   <main v-if="!ready" class="login-shell">
     <section class="login-story">
       <div class="brand">
-        <img src="/logo.png" alt="清眸" /><span
+        <img :src="brandLogo" alt="清眸" /><span
           >清眸<small>PUREYES</small></span
         >
       </div>
@@ -400,7 +401,7 @@ onUnmounted(() => {
           <Icon name="close" />
         </button>
         <div class="brand">
-          <img src="/logo.png" alt="清眸" /><span
+          <img :src="brandLogo" alt="清眸" /><span
             >清眸<small>PUREYES</small></span
           >
         </div>

@@ -2,6 +2,8 @@
 
 面向安防监控的团队视频调查前端，使用 Vue 3。与 [pureyes-harmony](https://github.com/EmadowKy/pureyes-harmony) 共享后端、账号、小组、录像、片段索引、人脸分组和多轮调查记录。
 
+[打开网页版 Beta](http://116.62.178.139/web/) · [使用文档](http://116.62.178.139/)
+
 ## 功能
 
 - 小组：创建、改名、通讯录、用户搜索、邀请、接受与拒绝、撤回、移除和退出。
@@ -45,6 +47,6 @@ npm run test:e2e
 
 ## 部署
 
-将 `frontend/dist` 发布到独立站点，并用反向代理将同域 `/api/` 转发到现有 pureyes-harmony 后端。生产环境使用 HTTPS，同源代理可避免混合内容和跨域问题。部署示例见 [部署说明](docs/web-deployment.md)。
+当前服务器的首页保留为文档，网页位于 `/web/`，同域 `/api/` 连接现有 pureyes-harmony 后端。构建时使用 `npm run build -- --base=/web/`，或设置 `VITE_APP_BASE=/web/`。部署与线上验收见 [部署说明](docs/web-deployment.md)。
 
 本仓库的 `backend/` 是早期版本，保留用于历史参考；网页工作台不使用它。后端开发、模型和数据库维护以 pureyes-harmony 为准。

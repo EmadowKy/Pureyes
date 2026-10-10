@@ -9,16 +9,18 @@ export default defineConfig({
   timeout: 120000,
   workers: 1,
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: process.env.PUREYES_TEST_BASE_URL || "http://127.0.0.1:3000/",
     browserName: "chromium",
     channel: "chrome",
     headless: true,
     trace: "off",
   },
   reporter: [["list"]],
-  webServer: {
-    command: "npm run dev",
-    url: "http://127.0.0.1:3000",
-    reuseExistingServer: true,
-  },
+  webServer: process.env.PUREYES_TEST_BASE_URL
+    ? undefined
+    : {
+        command: "npm run dev",
+        url: "http://127.0.0.1:3000",
+        reuseExistingServer: true,
+      },
 });
